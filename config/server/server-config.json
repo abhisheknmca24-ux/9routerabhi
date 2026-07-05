@@ -1,0 +1,30 @@
+{
+  "port": 20128,
+  "host": "127.0.0.1",
+  "cors": {
+    "enabled": true,
+    "origins": ["http://localhost:20128"],
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allowedHeaders": ["Content-Type", "Authorization", "X-API-Key", "anthropic-version"]
+  },
+  "ssl": {
+    "enabled": false,
+    "cert": "",
+    "key": ""
+  },
+  "rateLimiting": {
+    "enabled": true,
+    "windowMs": 60000,
+    "maxRequests": 100,
+    "standardHeaders": true,
+    "legacyHeaders": false
+  },
+  "bodyParser": {
+    "limit": "10mb",
+    "extended": true
+  },
+  "trustProxy": false,
+  "maxHeaderSize": 16384,
+  "keepAliveTimeout": 60000,
+  "headersTimeout": 65000
+}

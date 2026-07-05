@@ -1,0 +1,23 @@
+{
+  "name": "ai-gateway",
+  "version": "1.0.0",
+  "description": "AI Gateway - 9Router-based multi-provider AI proxy with routing, failover, health monitoring, observability, and dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node tests/acceptance-test.js",
+    "test:failover": "node tests/final-failover-test.js",
+    "clean": "node -e \"require('fs').readdirSync('logs').forEach(f=>{try{require('fs').unlinkSync('logs/'+f)}catch(e){}})\"",
+    "backup": "node scripts/backup.js"
+  },
+  "dependencies": {
+    "9router": "^0.5.18",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
+}

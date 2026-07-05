@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "maxRetries": 3,
+  "baseDelay": 1000,
+  "maxDelay": 10000,
+  "backoffMultiplier": 2,
+  "jitter": true,
+  "jitterMax": 500,
+  "retryableStatuses": [429, 500, 502, 503, 504],
+  "retryableErrors": ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EPIPE", "ESOCKETTIMEDOUT"],
+  "exponentialBackoff": true,
+  "overallTimeout": 30000
+}

@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "providers": ["openrouter", "nvidia", "cloudflare"],
+  "fallbackStrategy": "chain",
+  "chainOrder": ["openrouter", "nvidia", "cloudflare"],
+  "timeoutMs": 5000,
+  "maxFallbacks": 3,
+  "errorMapping": {
+    "401": { "action": "skip_provider", "message": "Provider authentication failed" },
+    "403": { "action": "skip_provider", "message": "Provider access denied" },
+    "429": { "action": "retry_with_backoff", "message": "Provider rate limited" },
+    "500": { "action": "retry", "message": "Provider internal error" },
+    "502": { "action": "skip_provider", "message": "Provider bad gateway" },
+    "503": { "action": "wait_and_retry", "message": "Provider unavailable", "waitMs": 5000 },
+    "504": { "action": "skip_provider", "message": "Provider timeout" },
+    "ETIMEDOUT": { "action": "skip_provider", "message": "Connection timeout" },
+    "ECONNRESET": { "action": "retry", "message": "Connection reset" }
+  },
+  "healthAware": true,
+  "circuitBreakerAware": true
+}

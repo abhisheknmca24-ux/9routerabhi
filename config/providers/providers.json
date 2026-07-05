@@ -1,0 +1,54 @@
+{
+  "providers": [
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "type": "api-key",
+      "enabled": true,
+      "models": ["openrouter/nvidia/nemotron-3-ultra-550b-a55b-20260604:free", "openrouter/poolside/laguna-xs-2.1:free", "openrouter/cohere/north-mini-code:free"],
+      "auth": {
+        "apiKey": "${OPENROUTER_API_KEY}",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "headers": {
+        "HTTP-Referer": "http://localhost:20128",
+        "X-Title": "9Router AI Gateway"
+      },
+      "rateLimit": 60,
+      "timeout": 60000,
+      "priority": 1
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA NIM",
+      "type": "api-key",
+      "enabled": true,
+      "models": ["nvidia/meta/llama-3.1-70b-instruct", "nvidia/mistralai/mistral-7b-instruct-v0.3", "nvidia/meta/llama-3.1-8b-instruct"],
+      "auth": {
+        "apiKey": "${NVIDIA_API_KEY}",
+        "endpoint": "https://integrate.api.nvidia.com/v1/chat/completions"
+      },
+      "rateLimit": 30,
+      "timeout": 60000,
+      "priority": 2
+    },
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare Workers AI",
+      "type": "api-key",
+      "enabled": true,
+      "models": ["cloudflare/@cf/meta/llama-3.2-3b-instruct", "cloudflare/@cf/mistral/mistral-7b-instruct-v0.1", "cloudflare/@cf/meta/llama-3.1-8b-instruct"],
+      "auth": {
+        "apiKey": "${CLOUDFLARE_API_KEY}",
+        "accountId": "${CLOUDFLARE_ACCOUNT_ID}",
+        "endpoint": "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run"
+      },
+      "rateLimit": 50,
+      "timeout": 60000,
+      "priority": 3
+    }
+  ],
+  "defaultProvider": "openrouter",
+  "fallbackProvider": "cloudflare",
+  "providerOrder": ["openrouter", "nvidia", "cloudflare"]
+}

@@ -1,0 +1,44 @@
+{
+  "strategy": "priority-failover",
+  "tiers": [
+    {
+      "name": "primary",
+      "providers": ["openrouter"],
+      "conditions": {
+        "minHealthScore": 0.8,
+        "maxLatency": 10000,
+        "requiredModels": []
+      }
+    },
+    {
+      "name": "secondary",
+      "providers": ["nvidia"],
+      "conditions": {
+        "minHealthScore": 0.7,
+        "maxLatency": 15000
+      }
+    },
+    {
+      "name": "fallback",
+      "providers": ["cloudflare"],
+      "conditions": {
+        "minHealthScore": 0.5,
+        "maxLatency": 30000
+      }
+    }
+  ],
+  "defaultTier": "primary",
+  "failoverTimeout": 5000,
+  "maxFailoverAttempts": 3,
+  "circuitBreaker": {
+    "enabled": true,
+    "failureThreshold": 3,
+    "resetTimeout": 300000,
+    "halfOpenMaxRequests": 1
+  },
+  "stickySession": false,
+  "loadBalancing": {
+    "enabled": false,
+    "algorithm": "round-robin"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "level": "info",
+  "format": "json",
+  "outputs": ["console", "file"],
+  "file": {
+    "directory": "logs",
+    "filename": "9router-%DATE%.log",
+    "maxSize": "100m",
+    "maxFiles": 30,
+    "zippedArchive": true,
+    "datePattern": "YYYY-MM-DD"
+  },
+  "redaction": {
+    "enabled": true,
+    "patterns": [
+      {"pattern": "api[_\\-]?key", "flags": "gi", "replacement": "[REDACTED]"},
+      {"pattern": "secret", "flags": "gi", "replacement": "[REDACTED]"},
+      {"pattern": "password", "flags": "gi", "replacement": "[REDACTED]"},
+      {"pattern": "token", "flags": "gi", "replacement": "[REDACTED]"},
+      {"pattern": "authorization", "flags": "gi", "replacement": "[REDACTED]"},
+      {"pattern": "x-api-key", "flags": "gi", "replacement": "[REDACTED]"}
+    ],
+    "maskFullValue": true,
+    "maskChar": "*"
+  },
+  "include": {
+    "timestamp": true,
+    "level": true,
+    "message": true,
+    "service": "9router-gateway",
+    "environment": "${NODE_ENV:development}",
+    "requestId": true,
+    "provider": true,
+    "model": true,
+    "latency": true,
+    "statusCode": true
+  },
+  "sampling": {
+    "enabled": false,
+    "rate": 1.0
+  }
+}

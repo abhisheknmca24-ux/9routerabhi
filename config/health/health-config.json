@@ -1,0 +1,38 @@
+{
+  "checkInterval": 30000,
+  "requestTimeout": 5000,
+  "unhealthyThreshold": 3,
+  "healthyThreshold": 2,
+  "cooldownPeriod": 300000,
+  "circuitBreaker": {
+    "enabled": true,
+    "failureThreshold": 3,
+    "resetTimeout": 300000,
+    "halfOpenMaxRequests": 1,
+    "monitoredStatusCodes": [429, 500, 502, 503, 504]
+  },
+  "checks": {
+    "http": {
+      "enabled": true,
+      "method": "GET",
+      "expectedStatus": 200,
+      "expectedResponseTime": 5000
+    },
+    "latency": {
+      "enabled": true,
+      "warningThreshold": 3000,
+      "criticalThreshold": 10000,
+      "samplesPerWindow": 10
+    },
+    "rateLimit": {
+      "enabled": true,
+      "warningThreshold": 0.8,
+      "criticalThreshold": 0.95,
+      "windowMs": 60000
+    }
+  },
+  "endpoints": {
+    "status": "/health",
+    "metrics": "/metrics"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "default",
+  "description": "Default profile - OpenRouter priority with NVIDIA and Cloudflare failover",
+  "active": true,
+  "routingPolicy": "priority-failover",
+  "providers": ["openrouter", "nvidia", "cloudflare"],
+  "features": {
+    "streaming": true,
+    "failover": true,
+    "healthChecks": true,
+    "circuitBreaker": true,
+    "rateLimiting": true,
+    "auditLogging": false,
+    "dashboard": false
+  },
+  "limits": {
+    "maxConcurrentRequests": 100,
+    "maxRetries": 3,
+    "requestTimeoutMs": 60000
+  }
+}
