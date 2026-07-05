@@ -9,7 +9,9 @@
     "test": "node tests/acceptance-test.js",
     "test:failover": "node tests/final-failover-test.js",
     "clean": "node -e \"require('fs').readdirSync('logs').forEach(f=>{try{require('fs').unlinkSync('logs/'+f)}catch(e){}})\"",
-    "backup": "node scripts/backup.js"
+    "backup": "node scripts/backup.js",
+    "start:all": "npm install && cd health-engine && npm install && cd .. && cd routing-engine && npm install && cd .. && cd observability-engine && npm install && cd .. && start http://localhost:20128 && node server.js & node health-engine/server.js & node routing-engine/server.js & node observability-engine/server.js",
+    "install:all": "npm install && cd health-engine && npm install && cd .. && cd routing-engine && npm install && cd .. && cd observability-engine && npm install"
   },
   "dependencies": {
     "9router": "^0.5.18",
