@@ -1,0 +1,55 @@
+# Environment files
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Backups
+backups/
+!backups/.gitkeep
+
+# Secrets directory
+config/secrets/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.tmp
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-*
+
+# Test results
+tests/results/
+!tests/results/.gitkeep
+
+# Runtime data
+observability-engine/data/
+
+# Audio/visual assets (large binary files)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.mp4
+*.mp3
+
+# Audit logs
+audit/
+
+# Claude Desktop config (contains API key)
+claude.jsonc
+
+# npm
+package-lock.json
