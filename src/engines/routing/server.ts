@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { ConsoleLogger } from '../../logger/console-logger.js';
 import { SecurityIntegration } from '../../security/security-integration.js';
 import { AliasRepository } from '../../repositories/alias-repository.js';
-import { AliasService } from '../../services/alias.service.js';
+import { AliasResolverEngine } from '../../services/alias-resolver-engine.js';
 import { ProviderHealthTracker } from '../../services/provider-health-tracker.js';
 import { IntelligentRouter } from '../../services/intelligent-router.js';
 import { createEngineServer } from '../engine-server.js';
@@ -24,17 +24,18 @@ const security = new SecurityIntegration({
 });
 
 // Wire alias resolution into routing
-const configDir = path.resolve(process.env.CONFIG_DIR || path.join(process.cwd(), 'config'));
-const aliasRepo = new AliasRepository(logger, configDir);
-const aliasService = new AliasService(aliasRepo, logger);
+const dbPath = path.resolve(process.cwd(), 'data', 'aliases.db');
+const aliasRepo = new AliasRepository(logger, dbPath);
+const aliasEngine = new AliasResolverEngine(aliasRepo, logger);
 const aliasResolver: AliasResolver = {
-  resolve: (name) => aliasService.resolveAlias(name),
+  resolve: (name) => aliasEngine.resolve(name),
 };
 
 // Intelligent routing components
 const healthTracker = new ProviderHealthTracker(logger);
 const intelligentRouter = new IntelligentRouter(healthTracker, logger);
 
+const configDir = path.resolve(process.env.CONFIG_DIR || path.join(process.cwd(), 'config'));
 const routingService = new RoutingService(
   configDir,
   logger,
