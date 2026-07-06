@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 class SecurityMonitor {
   constructor(options = {}) {
     this.thresholds = {
@@ -61,8 +63,10 @@ class SecurityMonitor {
 
   raiseAlert(alert) {
     alert.timestamp = Date.now();
-    alert.id = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    alert.id = `alert-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     this.alerts.push(alert);
+    // Cap alerts at 1000 to prevent unbounded memory growth
+    if (this.alerts.length > 1000) this.alerts.splice(0, this.alerts.length - 1000);
   }
 
   getAlerts(since) {

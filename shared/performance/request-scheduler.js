@@ -4,7 +4,6 @@ class RequestScheduler {
     this.queue = [];
     this.active = 0;
     this.stats = { queued: 0, completed: 0, failed: 0, timedOut: 0 };
-    this.debug = options.debug || false;
   }
 
   async add(fn, options = {}) {
@@ -12,7 +11,7 @@ class RequestScheduler {
     const timeout = options.timeout || 30000;
 
     return new Promise((resolve, reject) => {
-      const task = { fn, priority, timeout, resolve, reject, startTime: null };
+      const task = { fn, priority, timeout, resolve, reject, startTime: null, completed: false };
       this.queue.push(task);
       this.stats.queued++;
       this.queue.sort((a, b) => b.priority - a.priority);
@@ -29,8 +28,11 @@ class RequestScheduler {
     let timer = null;
     if (task.timeout < Infinity) {
       timer = setTimeout(() => {
-        this.stats.timedOut++;
+        // Guard against double-completion: if task already finished, timer does nothing
+        if (task.completed) return;
+        task.completed = true;
         this.active--;
+        this.stats.timedOut++;
         task.reject(new Error('REQUEST_TIMEOUT'));
         this.processNext();
       }, task.timeout);
@@ -38,11 +40,16 @@ class RequestScheduler {
 
     try {
       const result = await task.fn();
+      // Guard against double-completion: if timeout already fired, do nothing
+      if (task.completed) return;
+      task.completed = true;
       clearTimeout(timer);
       this.stats.completed++;
       this.active--;
       task.resolve(result);
     } catch (err) {
+      if (task.completed) return;
+      task.completed = true;
       clearTimeout(timer);
       this.stats.failed++;
       this.active--;

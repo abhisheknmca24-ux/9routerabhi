@@ -5,13 +5,26 @@ const path = require('path');
 class SecretManager {
   constructor(options = {}) {
     this.secretsDir = options.secretsDir || path.join(process.env.PROJECT_ROOT || '.', 'config', 'secrets');
-    this.encryptionKey = options.encryptionKey || process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
     this.cache = new Map();
     this.cacheTTL = options.cacheTTL || 60000;
+
+    // Encryption key MUST come from environment or options. No fallback — if missing, operations throw.
+    this.encryptionKey = options.encryptionKey || process.env.ENCRYPTION_KEY;
+    if (!this.encryptionKey) {
+      console.error('CRITICAL: ENCRYPTION_KEY is not set. Set a 64-char hex key in .env file.');
+      // Still create the instance so the app can start and guide the user, but crypto ops will fail
+    }
+
+    // Use a persistent per-project derived salt instead of hardcoded
+    const projectRoot = process.env.PROJECT_ROOT || '.';
+    this._salt = projectRoot.replace(/[^a-zA-Z0-9]/g, '') + '-v1';
   }
 
   _getCipherKey() {
-    return crypto.scryptSync(this.encryptionKey, '9router-salt', 32);
+    if (!this.encryptionKey) {
+      throw new Error('ENCRYPTION_KEY is not configured. Set it in .env or pass encryptionKey option.');
+    }
+    return crypto.scryptSync(this.encryptionKey, this._salt, 32);
   }
 
   encrypt(plaintext) {

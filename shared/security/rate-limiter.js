@@ -5,6 +5,14 @@ class RateLimiter {
     this.windows = new Map();
     this.blocked = new Map();
     this.blockDuration = options.blockDuration || 300000;
+    this._cleanupTimer = null;
+    this._startCleanup();
+  }
+
+  _startCleanup() {
+    // Periodic cleanup every 60s to prevent unbounded memory growth
+    this._cleanupTimer = setInterval(() => this._cleanup(), 60000);
+    if (this._cleanupTimer.unref) this._cleanupTimer.unref();
   }
 
   check(key) {
@@ -18,7 +26,6 @@ class RateLimiter {
 
     if (!this.windows.has(key)) {
       this.windows.set(key, []);
-      this._cleanup();
     }
 
     const window = this.windows.get(key);
@@ -49,8 +56,19 @@ class RateLimiter {
 
   _cleanup() {
     const now = Date.now();
+    const cutoff = now - this.windowMs;
+
+    // Clean up blocked entries
     for (const [key, blockUntil] of this.blocked) {
       if (now >= blockUntil) this.blocked.delete(key);
+    }
+
+    // Clean up windows entries with no activity in the window period
+    for (const [key, timestamps] of this.windows) {
+      // Remove expired timestamps
+      while (timestamps.length > 0 && timestamps[0] < cutoff) timestamps.shift();
+      // If window is now empty, remove it entirely to free memory
+      if (timestamps.length === 0) this.windows.delete(key);
     }
   }
 

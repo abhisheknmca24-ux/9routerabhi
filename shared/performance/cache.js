@@ -11,12 +11,20 @@ class Cache {
     if (!entry) { this.stats.misses++; return null; }
     if (Date.now() > entry.expires) { this.cache.delete(key); this.stats.misses++; return null; }
     entry.lastAccess = Date.now();
+    // Move to end to maintain recency order
+    this.cache.delete(key);
+    this.cache.set(key, entry);
     this.stats.hits++;
     return entry.value;
   }
 
   set(key, value, ttl) {
-    if (this.cache.size >= this.maxSize) this.evictLRU();
+    // If key already exists, delete first so the new entry is placed at the end
+    if (this.cache.has(key)) this.cache.delete(key);
+    // Evict oldest entries until there's room
+    while (this.cache.size >= this.maxSize) {
+      this._evictOldest();
+    }
     this.cache.set(key, {
       value,
       expires: Date.now() + (ttl || this.ttl),
@@ -33,16 +41,13 @@ class Cache {
     this.cache.clear();
   }
 
-  evictLRU() {
-    let oldest = null;
-    let oldestKey = null;
-    for (const [key, entry] of this.cache) {
-      if (!oldest || entry.lastAccess < oldest) {
-        oldest = entry.lastAccess;
-        oldestKey = key;
-      }
+  _evictOldest() {
+    // Map iterates in insertion order, so the first key is the oldest
+    const oldestKey = this.cache.keys().next().value;
+    if (oldestKey !== undefined) {
+      this.cache.delete(oldestKey);
+      this.stats.evictions++;
     }
-    if (oldestKey) { this.cache.delete(oldestKey); this.stats.evictions++; }
   }
 
   getStats() {

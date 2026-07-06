@@ -52,15 +52,29 @@ class BackupManager {
 
   _hashDir(dir) {
     const hash = crypto.createHash('sha256');
-    const files = fs.readdirSync(dir).sort();
-    for (const file of files) {
-      if (file === 'manifest.json') continue;
-      const filePath = path.join(dir, file);
+    const entries = [];
+    this._collectFiles(dir, entries, ['manifest.json']);
+    for (const filePath of entries.sort()) {
       try {
         hash.update(fs.readFileSync(filePath));
       } catch {}
     }
     return hash.digest('hex');
+  }
+
+  _collectFiles(dir, entries, exclude) {
+    try {
+      const items = fs.readdirSync(dir, { withFileTypes: true });
+      for (const item of items) {
+        if (exclude.includes(item.name)) continue;
+        const fullPath = path.join(dir, item.name);
+        if (item.isDirectory()) {
+          this._collectFiles(fullPath, entries, exclude);
+        } else if (item.isFile()) {
+          entries.push(fullPath);
+        }
+      }
+    } catch {}
   }
 
   _cleanup() {

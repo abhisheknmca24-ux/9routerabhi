@@ -25,12 +25,23 @@ class SecurityIntegration {
   }
 
   middleware(req, res, next) {
+    // Apply security headers (synchronous — no callback needed)
     this.securityHeaders.apply(req, res, () => {});
-    const rateCheck = this.rateLimiter.check(req.ip || req.connection.remoteAddress);
+
+    // Rate limiting check
+    const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+    const rateCheck = this.rateLimiter.check(clientIp);
     if (!rateCheck.allowed) {
       res.setHeader('Retry-After', rateCheck.retryAfter);
-      return res.status(429).json({ error: { message: 'Too many requests', type: 'rate_limit_error' } });
+      if (typeof res.status === 'function') {
+        return res.status(429).json({ error: { message: 'Too many requests', type: 'rate_limit_error' } });
+      }
+      // Fallback for non-Express environments
+      res.statusCode = 429;
+      return res.end(JSON.stringify({ error: { message: 'Too many requests', type: 'rate_limit_error' } }));
     }
+
+    // Authentication
     this.authMiddleware.authenticate(req, res, next);
   }
 
@@ -54,11 +65,12 @@ class SecurityIntegration {
   }
 
   recordRequest(req, statusCode) {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     this.securityMonitor.recordEvent({
       type: 'request',
-      ip: req.ip,
+      ip,
       method: req.method,
-      path: req.path,
+      path: typeof req.path === 'function' ? req.path() : (req.path || req.url),
       statusCode,
     });
     if (statusCode >= 400) {

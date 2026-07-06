@@ -8,15 +8,23 @@ class StreamOptimizer {
   async createStreamHandler(response, onToken, onDone, onError) {
     let buffer = '';
     let index = 0;
+    let done = false;
 
     response.setEncoding('utf8');
 
     for await (const chunk of response) {
+      if (done) break;
       buffer += chunk;
+
+      // Check buffer size and apply backpressure by pausing the response stream
       if (this.backpressureEnabled && buffer.length > this.maxBufferSize) {
+        response.pause();
+        // Wait for next tick to allow consumer to drain
         await new Promise(resolve => setImmediate(resolve));
+        response.resume();
       }
 
+      // Process complete lines from buffer
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
@@ -25,7 +33,11 @@ class StreamOptimizer {
         if (!trimmed || trimmed.startsWith(':')) continue;
         if (trimmed.startsWith('data: ')) {
           const data = trimmed.slice(6);
-          if (data === '[DONE]') { if (onDone) onDone(); return; }
+          if (data === '[DONE]') {
+            done = true;
+            if (onDone) onDone();
+            return;
+          }
           try {
             const parsed = JSON.parse(data);
             if (onToken) onToken(parsed, index++);
@@ -33,10 +45,18 @@ class StreamOptimizer {
             if (onError) onError(new Error(`Parse error: ${err.message}`));
           }
         }
+        // SSE event/retry fields are silently ignored (only data: is processed)
       }
     }
 
-    if (buffer.trim() && onDone) onDone();
+    // Stream ended naturally — flush remaining buffer
+    if (buffer.trim() && !done) {
+      // Partial line remaining — treat as error if it contains meaningful content
+      if (buffer.trim().length > 0 && onError) {
+        onError(new Error(`Incomplete SSE data: ${buffer.slice(0, 100)}`));
+      }
+    }
+    if (!done && onDone) onDone();
   }
 
   createSSEStream(onData) {

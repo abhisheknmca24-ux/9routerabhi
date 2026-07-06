@@ -31,7 +31,8 @@ class ResourceMonitor {
     const freeMem = os.freemem();
 
     const cpuPercent = this._calcCpuPercent(usage);
-    this._lastCpu = usage.user + usage.system;
+    this._lastCpu = { user: usage.user, system: usage.system };
+    this._lastCheckTime = Date.now();
 
     const snapshot = {
       timestamp: Date.now(),
@@ -68,7 +69,11 @@ class ResourceMonitor {
 
   _calcCpuPercent(usage) {
     const total = usage.user + usage.system;
-    return this._lastCpu ? ((total - this._lastCpu) / (this.interval / 1000)) / os.cpus().length : 0;
+    if (!this._lastCpu) return 0;
+    const delta = total - (this._lastCpu.user + this._lastCpu.system);
+    const elapsed = this._lastCheckTime ? (Date.now() - this._lastCheckTime) / 1000 : this.interval / 1000;
+    if (elapsed <= 0) return 0;
+    return (delta / elapsed) / os.cpus().length;
   }
 
   _checkWarnings(snapshot) {
@@ -78,6 +83,11 @@ class ResourceMonitor {
     if (snapshot.memory.percentUsed > this.warningThresholds.heapPercent) {
       this.warnings.push({ type: 'heap', value: snapshot.memory.percentUsed, threshold: this.warningThresholds.heapPercent, timestamp: snapshot.timestamp });
     }
+    if (snapshot.os.memUsedPercent > this.warningThresholds.memoryPercent) {
+      this.warnings.push({ type: 'os_memory', value: snapshot.os.memUsedPercent, threshold: this.warningThresholds.memoryPercent, timestamp: snapshot.timestamp });
+    }
+    // Keep warnings bounded at 1000 entries
+    if (this.warnings.length > 1000) this.warnings.splice(0, this.warnings.length - 1000);
   }
 
   getHistory(count) {

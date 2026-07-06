@@ -21,7 +21,9 @@ class IntegrityVerifier {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         if (exclude.includes(entry.name)) continue;
-        if (entry.name.startsWith('.')) continue;
+        // Note: dot-files (like .env) are intentionally excluded by default.
+        // To include them, remove `.env` and similar from the exclude list
+        // or add a separate manifest for sensitive files.
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           this._hashDir(fullPath, manifest, exclude);
@@ -31,7 +33,9 @@ class IntegrityVerifier {
           manifest.files[relativePath] = crypto.createHash('sha256').update(content).digest('hex');
         }
       }
-    } catch {}
+    } catch (err) {
+      console.error(`IntegrityVerifier: error reading ${dir}: ${err.message}`);
+    }
   }
 
   saveManifest() {

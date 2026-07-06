@@ -18,12 +18,14 @@ class Benchmark {
     const runBatch = async () => {
       const batch = [];
       for (let i = 0; i < concurrency; i++) {
+        const iterIdx = completedCount; // capture iteration index before increment
+        completedCount++;
         batch.push((async () => {
           const t0 = Date.now();
           try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeout);
-            await fn({ signal: controller.signal, iteration: latencies.length });
+            await fn({ signal: controller.signal, iteration: iterIdx });
             clearTimeout(timer);
             latencies.push(Date.now() - t0);
           } catch (err) {
@@ -36,6 +38,7 @@ class Benchmark {
     };
 
     const batches = Math.ceil(iterations / concurrency);
+    let completedCount = 0;
     for (let i = 0; i < batches && this.running; i++) {
       await runBatch();
     }

@@ -7,7 +7,9 @@ const SENSITIVE_PATTERNS = [
   { regex: /(authorization:\s*)[^\s,]+/gi, replacement: '$1[REDACTED]' },
   { regex: /x-api-key:\s*\S+/gi, replacement: 'x-api-key: [REDACTED]' },
   { regex: /sk-[a-zA-Z0-9]{20,}/g, replacement: 'sk-[REDACTED]' },
-  { regex: /[a-fA-F0-9]{32,}/g, replacement: '[REDACTED_HEX]' },
+  // Note: broad hex matching such as /[a-fA-F0-9]{32,}/ was removed because it
+  // redacts legitimate content like UUIDs, git hashes, and object IDs.
+  // Add project-specific hex patterns below as needed.
 ];
 
 class LogSanitizer {
