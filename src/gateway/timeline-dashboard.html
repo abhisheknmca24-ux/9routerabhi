@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gateway Timeline</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface-2: #1c2333; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922; --orange: #d4760a; --purple: #d2a8ff;
+    --radius: 8px; --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 24px; max-width: 1400px; margin: 0 auto; line-height: 1.5; }
+  header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 24px; font-weight: 600; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .stats-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 20px; text-align: center; min-width: 100px; }
+  .stat-card .val { font-size: 22px; font-weight: 700; }
+  .stat-card .lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .chart-card h3 { font-size: 13px; margin-bottom: 8px; color: var(--text-dim); }
+  .chart-card canvas { max-height: 150px; }
+
+  .controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .controls input, .controls select {
+    padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 13px; outline: none;
+  }
+  .controls input:focus, .controls select:focus { border-color: var(--accent); }
+
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  th { background: var(--surface-2); font-weight: 600; color: var(--text-dim); text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-2); }
+  .empty td { text-align: center; padding: 40px; color: var(--text-dim); font-style: italic; }
+
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 500; }
+  .badge-success { background: #3fb95022; color: var(--green); }
+  .badge-error { background: #f8514922; color: var(--red); }
+  .badge-stream { background: #58a6ff22; color: var(--accent); }
+  .badge-alias { background: #d2a8ff22; color: var(--purple); }
+
+  .timeline-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; gap: 1px; min-width: 80px; }
+  .timeline-bar .seg { height: 100%; border-radius: 1px; }
+
+  .pagination { display: flex; gap: 4px; justify-content: center; align-items: center; margin-bottom: 16px; }
+  .pagination .info { font-size: 13px; color: var(--text-dim); margin: 0 12px; }
+
+  .detail-modal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .detail-modal.active { display: flex; }
+  .detail-modal .content {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto;
+  }
+  .detail-modal h2 { font-size: 16px; margin-bottom: 16px; }
+  .detail-modal .row { display: flex; margin-bottom: 8px; font-size: 13px; }
+  .detail-modal .row .label { width: 140px; color: var(--text-dim); font-weight: 500; }
+  .detail-modal .stages { margin-top: 12px; }
+  .detail-modal .stage-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .detail-modal .stage-row .name { width: 140px; font-weight: 500; }
+  .detail-modal .stage-row .bar { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+  .detail-modal .stage-row .bar .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .detail-modal .stage-row .ms { width: 60px; text-align: right; color: var(--text-dim); }
+
+  @media (max-width: 768px) { body { padding: 12px; } .charts-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⏱ Gateway Timeline</h1>
+  <div class="controls">
+    <input id="searchInput" placeholder="Search model, client, error..." style="width:200px" oninput="debounceSearch()">
+    <select id="filterClient" onchange="refreshAll()"><option value="">All Clients</option></select>
+    <select id="filterStatus" onchange="refreshAll()"><option value="">All Status</option><option value="true">Success</option><option value="false">Failed</option></select>
+    <button class="btn btn-sm" onclick="exportJSON()">📥 JSON</button>
+    <button class="btn btn-sm" onclick="exportCSV()">📥 CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat-card"><div class="val text-accent" id="sTotal">0</div><div class="lbl">Requests</div></div>
+  <div class="stat-card"><div class="val text-green" id="sSuccess">0%</div><div class="lbl">Success</div></div>
+  <div class="stat-card"><div class="val text-yellow" id="sLatency">0ms</div><div class="lbl">Avg Latency</div></div>
+  <div class="stat-card"><div class="val" id="sTokens" style="color:var(--purple)">0</div><div class="lbl">Tokens</div></div>
+  <div class="stat-card"><div class="val" id="sCost" style="color:#d2a8ff">$0</div><div class="lbl">Cost</div></div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card"><h3>✅ Success vs Errors</h3><canvas id="pieChart"></canvas></div>
+  <div class="chart-card"><h3>📊 Requests by Client</h3><canvas id="clientChart"></canvas></div>
+  <div class="chart-card"><h3>⚡ Latency (last 50)</h3><canvas id="latencyChart"></canvas></div>
+  <div class="chart-card"><h3>🔝 Top Models</h3><canvas id="modelChart"></canvas></div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>Time</th><th>Client</th><th>Model</th><th>Alias</th><th>Combo</th><th>Providers</th>
+      <th>Latency</th><th>Status</th><th>Retries</th><th>Tokens</th><th>Timeline</th>
+    </tr></thead>
+    <tbody id="tableBody"><tr class="empty"><td colspan="11">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="pagination" id="pagination"></div>
+
+<!-- Detail Modal -->
+<div class="detail-modal" id="detailModal">
+  <div class="content" id="detailContent"></div>
+</div>
+
+<script>
+const API = '/api/timeline';
+const PAGE_SIZE = 50;
+let currentPage = 1;
+let searchTimer = null;
+let charts = {};
+let allData = [];
+
+async function refreshAll() {
+  try {
+    const search = document.getElementById('searchInput').value.trim();
+    const client = document.getElementById('filterClient').value;
+    const status = document.getElementById('filterStatus').value;
+
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (client) params.set('client', client);
+    if (status) params.set('success', status);
+    params.set('page', String(currentPage));
+    params.set('limit', String(PAGE_SIZE));
+    params.set('sortBy', 'timestamp');
+
+    const [listRes, statsRes] = await Promise.all([
+      fetch(`${API}?${params}`),
+      fetch(`${API}/stats`),
+    ]);
+    const data = await listRes.json();
+    const stats = await statsRes.json();
+
+    allData = data.records || [];
+    renderStats(stats);
+    renderTable(allData);
+    renderPagination(data);
+    renderCharts(stats, allData);
+
+    // Populate client filter options
+    const sel = document.getElementById('filterClient');
+    const clients = [...new Set(data.records.map(r => r.client).filter(Boolean))];
+    clients.forEach(c => { if (![...sel.options].some(o => o.value === c)) { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); } });
+
+  } catch { document.getElementById('tableBody').innerHTML = '<tr class="empty"><td colspan="11">Failed to load</td></tr>'; }
+}
+
+function renderStats(s) {
+  document.getElementById('sTotal').textContent = s.totalRequests || 0;
+  document.getElementById('sSuccess').textContent = ((s.successRate || 0) * 100).toFixed(1) + '%';
+  document.getElementById('sLatency').textContent = Math.round(s.avgLatency || 0) + 'ms';
+  document.getElementById('sTokens').textContent = (s.totalTokens || 0).toLocaleString();
+  document.getElementById('sCost').textContent = '$' + (s.totalCost || 0).toFixed(4);
+}
+
+function renderTable(records) {
+  const tbody = document.getElementById('tableBody');
+  if (records.length === 0) { tbody.innerHTML = '<tr class="empty"><td colspan="11">No requests recorded</td></tr>'; return; }
+
+  tbody.innerHTML = records.map(r => {
+    const stages = parseStages(r.stageTimeline);
+    const maxMs = Math.max(...stages.map(s => s.durationMs), 1);
+    const barHtml = stages.map(s => {
+      const pct = (s.durationMs / maxMs) * 100;
+      const colors = ['#58a6ff','#3fb950','#d29922','#f85149','#d2a8ff','#d4760a','#56d4dd','#79c0ff'];
+      const ci = stages.indexOf(s) % colors.length;
+      return `<div class="seg" style="width:${pct}%;background:${colors[ci]}" title="${s.stage}: ${s.durationMs}ms"></div>`;
+    }).join('');
+
+    return `<tr onclick="showDetail('${r.requestId}')" style="cursor:pointer">
+      <td style="font-size:11px;color:var(--text-dim)">${new Date(r.timestamp).toLocaleTimeString()}</td>
+      <td><span class="badge" style="background:#58a6ff22;color:var(--accent)">${esc(r.client)}</span></td>
+      <td><code>${esc(r.model)}</code></td>
+      <td>${r.aliased ? '<span class="badge badge-alias">'+esc(r.aliasName || r.model)+'</span>' : '—'}</td>
+      <td>${r.combo ? '<span class="badge" style="background:#3fb95022;color:var(--green)">'+esc(r.combo)+'</span>' : '—'}</td>
+      <td style="font-size:11px">${esc(r.providers)}</td>
+      <td style="font-weight:600">${r.latencyMs}ms</td>
+      <td>${r.success ? '<span class="badge badge-success">'+ (r.statusCode || 200) +'</span>'
+                    : '<span class="badge badge-error">'+ (r.statusCode || 'ERR') +'</span>'}</td>
+      <td>${r.retries || 0}</td>
+      <td>${(r.tokens || 0).toLocaleString()}</td>
+      <td><div class="timeline-bar">${barHtml}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPagination(data) {
+  const el = document.getElementById('pagination');
+  if (data.totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="btn btn-sm" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>←</button>
+    <span class="info">Page ${data.page} of ${data.totalPages} (${data.total})</span>
+    <button class="btn btn-sm" onclick="goPage(${currentPage + 1})" ${currentPage >= data.totalPages ? 'disabled' : ''}>→</button>`;
+}
+
+function goPage(p) { currentPage = p; refreshAll(); }
+
+function renderCharts(stats, records) {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch {} });
+
+  // Pie: success vs errors
+  const pieCtx = document.getElementById('pieChart').getContext('2d');
+  charts.pie = new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Success', 'Errors'],
+      datasets: [{
+        data: [stats.successRate * (stats.totalRequests || 1), stats.errorRate * (stats.totalRequests || 1)],
+        backgroundColor: ['#3fb950', '#f85149'],
+        borderWidth: 0,
+      }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 10 } } } } },
+  });
+
+  // Bar: by client
+  if (stats.topClients?.length) {
+    const clCtx = document.getElementById('clientChart').getContext('2d');
+    charts.client = new Chart(clCtx, {
+      type: 'bar',
+      data: {
+        labels: stats.topClients.map(c => c.client),
+        datasets: [{ label: 'Requests', data: stats.topClients.map(c => c.count), backgroundColor: '#58a6ff88', borderColor: '#58a6ff', borderWidth: 1 }],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e', font: { size: 9 } } }, y: { ticks: { color: '#8b949e', font: { size: 9 } } } } },
+    });
+  }
+
+  // Line: latency of last 50 records
+  if (records.length) {
+    const latCtx = document.getElementById('latencyChart').getContext('2d');
+    const rev = [...records].reverse();
+    charts.latency = new Chart(latCtx, {
+      type: 'line',
+      data: {
+        labels: rev.map(r => new Date(r.timestamp).toLocaleTimeString()),
+        datasets: [{
+          label: 'Latency (ms)', data: rev.map(r => r.latencyMs),
+          borderColor: '#d29922', backgroundColor: '#d2992233', fill: true, tension: 0.3, pointRadius: 0,
+        }],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e', font: { size: 8, maxTicksLimit: 10 } } }, y: { ticks: { color: '#8b949e', font: { size: 9 } } } } },
+    });
+  }
+
+  // Bar: top models
+  if (stats.topModels?.length) {
+    const mCtx = document.getElementById('modelChart').getContext('2d');
+    charts.model = new Chart(mCtx, {
+      type: 'bar',
+      data: {
+        labels: stats.topModels.map(m => m.model),
+        datasets: [{ label: 'Requests', data: stats.topModels.map(m => m.count), backgroundColor: '#d2a8ff88', borderColor: '#d2a8ff', borderWidth: 1 }],
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e', font: { size: 9 } } }, y: { ticks: { color: '#8b949e', font: { size: 9 } } } } },
+    });
+  }
+}
+
+function showDetail(requestId) {
+  fetch(`${API}/${requestId}`).then(r => r.json()).then(r => {
+    const stages = parseStages(r.stageTimeline);
+    const maxMs = Math.max(...stages.map(s => s.durationMs), 1);
+
+    const el = document.getElementById('detailContent');
+    el.innerHTML = `
+      <h2>Request: ${r.requestId}</h2>
+      <div class="row"><span class="label">Time</span><span>${new Date(r.timestamp).toLocaleString()}</span></div>
+      <div class="row"><span class="label">Client</span><span>${r.client} (${r.protocol})</span></div>
+      <div class="row"><span class="label">Model</span><span><code>${r.model}</code> ${r.aliased ? '→ <code>'+r.aliasName+'</code>' : ''}</span></div>
+      <div class="row"><span class="label">Combo</span><span>${r.combo || '—'}</span></div>
+      <div class="row"><span class="label">Providers</span><span>${r.providers} ${r.finalProvider ? '→ <strong>'+r.finalProvider+'</strong>' : ''}</span></div>
+      <div class="row"><span class="label">Latency</span><span><strong>${r.latencyMs}ms</strong></span></div>
+      <div class="row"><span class="label">Status</span><span>${r.success ? '✅ Success' : '❌ '+r.error} (${r.statusCode})</span></div>
+      <div class="row"><span class="label">Retries/Fallbacks</span><span>${r.retries} retries, ${r.fallbacks} fallbacks</span></div>
+      <div class="row"><span class="label">Streamed</span><span>${r.streamed ? 'Yes' : 'No'}</span></div>
+      <div class="row"><span class="label">Tokens</span><span>${(r.tokens||0).toLocaleString()}</span></div>
+      <div class="row"><span class="label">Cost</span><span>$${(r.cost||0).toFixed(4)}</span></div>
+      <div class="row"><span class="label">Prompt</span><span style="color:var(--text-dim)">${esc(r.promptPreview || '')}</span></div>
+      <div class="row"><span class="label">Response</span><span style="color:var(--text-dim)">${(r.responseLength||0).toLocaleString()} chars</span></div>
+      <div class="stages"><h3 style="font-size:14px;margin:12px 0 8px">Stage Timeline</h3>
+        ${stages.map(s => `<div class="stage-row">
+          <span class="name">${s.stage}</span>
+          <div class="bar"><div class="fill" style="width:${(s.durationMs/maxMs)*100}%"></div></div>
+          <span class="ms">${s.durationMs}ms</span>
+        </div>`).join('')}
+      </div>
+      <div class="stages" style="margin-top:16px"><h3 style="font-size:14px;margin-bottom:8px">Raw Timeline</h3>
+        <pre style="font-size:11px;background:var(--surface-2);padding:12px;border-radius:4px;max-height:200px;overflow:auto">${JSON.stringify(stages, null, 2)}</pre>
+      </div>
+      <button class="btn" onclick="closeDetail()" style="margin-top:12px">Close</button>
+    `;
+    document.getElementById('detailModal').classList.add('active');
+  });
+}
+
+function closeDetail() { document.getElementById('detailModal').classList.remove('active'); }
+
+function parseStages(json) {
+  try { return JSON.parse(json) || []; } catch { return []; }
+}
+
+function exportJSON() { window.open(`${API}/export/json`, '_blank'); }
+function exportCSV() { window.open(`${API}/export/csv`, '_blank'); }
+function debounceSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(() => { currentPage = 1; refreshAll(); }, 300); }
+function esc(s) { if(!s)return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+document.addEventListener('DOMContentLoaded', () => { refreshAll(); setInterval(refreshAll, 10000); });
+document.getElementById('detailModal').addEventListener('click', (e) => { if (e.target === document.getElementById('detailModal')) closeDetail(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+</script>
+</body>
+</html>
