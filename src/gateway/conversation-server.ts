@@ -130,7 +130,7 @@ createEngineServer({
     app.patch('/api/conversations/:id/provider', (req, res) => {
       const { provider } = req.body;
       if (!provider) return res.status(400).json({ error: 'provider required' });
-      conversationService.updateProvider(req.params.id, provider);
+      conversationService.onProviderFailover(req.params.id, 'unknown', provider);
       res.json({ status: 'updated', provider });
     });
 

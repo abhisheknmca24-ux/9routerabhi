@@ -7,7 +7,6 @@ import {
   type ConversationListResult,
   type TokenUsage,
   type CompressionState,
-  type ContentBlockData,
 } from '../types/conversation.types.js';
 import { ConversationRepository } from '../repositories/conversation-repository.js';
 
@@ -15,15 +14,23 @@ import { ConversationRepository } from '../repositories/conversation-repository.
  * ConversationService — manages shared, provider-independent conversations.
  *
  * Key design: conversations are identified by a stable conversation ID
- * passed by the client. When a provider fails mid-conversation, the
- * next provider picks up with the full conversation history intact.
+ * (msg_xxx) passed by the client. When a provider fails mid-conversation,
+ * the next provider receives the FULL conversation context:
+ *   - system prompt
+ *   - all previous messages (user, assistant, tool)
+ *   - assistant response history
+ *   - tool calls and results
+ *   - file attachments
+ *   - conversation state (active, metadata, compression)
+ *
+ * The client never knows failover occurred. Conversation IDs remain identical.
  */
 
 export class ConversationService {
   private static readonly TOKEN_COST_PER_INPUT = 0.000003;
   private static readonly TOKEN_COST_PER_OUTPUT = 0.000015;
-  private static readonly MAX_MESSAGES_BEFORE_COMPRESSION = 20;
-  private static readonly MAX_TOKENS_BEFORE_COMPRESSION = 8000;
+  private static readonly MAX_MESSAGES_BEFORE_COMPRESSION = 30;
+  private static readonly MAX_TOKENS_BEFORE_COMPRESSION = 12000;
 
   constructor(
     private readonly repository: ConversationRepository,
@@ -45,26 +52,22 @@ export class ConversationService {
   }): { conversation: Conversation; isNew: boolean } {
     let conv: Conversation | null = null;
 
-    // Try to resume existing conversation
     if (params.conversationId) {
       conv = this.repository.get(params.conversationId);
     }
 
     if (conv) {
-      // Update existing conversation
       this.repository.update(conv.id, {
         model: params.model,
         lastProvider: params.provider || conv.lastProvider,
         active: true,
       });
-
       return { conversation: conv, isNew: false };
     }
 
-    // Create new conversation
     const now = new Date().toISOString();
     const newConv: Conversation = {
-      id: params.conversationId || `conv_${crypto.randomUUID().slice(0, 12)}`,
+      id: params.conversationId || `msg_${crypto.randomUUID().slice(0, 12)}`,
       externalId: params.conversationId,
       clientType: params.clientType,
       model: params.model,
@@ -86,8 +89,61 @@ export class ConversationService {
 
     this.repository.create(newConv);
     this.logger.info(`Conversation created: ${newConv.id}`, { clientType: params.clientType, model: params.model });
-
     return { conversation: newConv, isNew: true };
+  }
+
+  /**
+   * Build the FULL message array for a new provider request, including:
+   * - system prompt
+   * - all previous messages in order
+   * - assistant responses
+   * - tool calls and results
+   * - attachments as context
+   *
+   * This is what makes failover transparent — the new provider gets
+   * the complete conversation history.
+   */
+  buildFullRequest(conversationId: string): {
+    systemPrompt?: string;
+    messages: Array<{ role: string; content: unknown }>;
+    attachments: Array<{ name: string; mimeType: string; type: string }>;
+  } {
+    const conv = this.repository.get(conversationId);
+    if (!conv) {
+      return { messages: [], attachments: [] };
+    }
+
+    // 1. System prompt
+    const systemPrompt = conv.systemPrompt;
+
+    // 2. All messages (including tool calls, tool results, compressed messages)
+    const messages: Array<{ role: string; content: unknown }> = [];
+
+    for (const msg of conv.messages) {
+      const entry: { role: string; content: unknown } = {
+        role: msg.role,
+        content: msg.originalContent ? JSON.parse(msg.originalContent) : msg.content,
+      };
+
+      // Preserve tool call metadata
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        (entry as any).tool_calls = msg.toolCalls;
+      }
+      if (msg.toolCallId) {
+        (entry as any).tool_call_id = msg.toolCallId;
+      }
+
+      messages.push(entry);
+    }
+
+    // 3. Attachments
+    const attachments = this.repository.getFiles(conversationId).map(f => ({
+      name: f.name,
+      mimeType: f.mimeType,
+      type: f.type,
+    }));
+
+    return { systemPrompt, messages, attachments };
   }
 
   /**
@@ -95,14 +151,13 @@ export class ConversationService {
    */
   addMessages(
     conversationId: string,
-    requestMessages: Array<{ role: string; content: string | unknown }>,
+    requestMessages: Array<{ role: string; content: string | unknown; tool_calls?: Array<unknown>; tool_call_id?: string }>,
     responseContent: string,
     provider: string,
     tokens?: { input: number; output: number },
   ): void {
     const now = new Date().toISOString();
 
-    // Add each user message
     for (const msg of requestMessages) {
       const message: ConversationMessage = {
         id: `msg_${crypto.randomUUID().slice(0, 8)}`,
@@ -110,6 +165,8 @@ export class ConversationService {
         content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
         timestamp: now,
         provider,
+        toolCalls: msg.tool_calls as ConversationMessage['toolCalls'],
+        toolCallId: msg.tool_call_id,
       };
       this.repository.addMessage(conversationId, message);
     }
@@ -141,69 +198,47 @@ export class ConversationService {
       }
     }
 
-    // Check if compression is needed
     this._maybeCompress(conversationId);
   }
 
   /**
-   * Add tool call and tool result messages.
+   * Update provider after failover — the conversation ID stays the same,
+   * only the provider reference changes.
    */
-  addToolMessages(
-    conversationId: string,
-    toolCalls: Array<{ id: string; name: string; arguments: string }>,
-    toolResults: Array<{ id: string; content: string }>,
-    provider: string,
-  ): void {
-    const now = new Date().toISOString();
+  onProviderFailover(conversationId: string, failedProvider: string, newProvider: string): void {
+    this.repository.update(conversationId, { lastProvider: newProvider });
 
-    for (const tc of toolCalls) {
-      const msg: ConversationMessage = {
-        id: `msg_${crypto.randomUUID().slice(0, 8)}`,
-        role: 'assistant',
-        content: JSON.stringify(tc),
-        timestamp: now,
-        provider,
-        toolCalls: [{
-          id: tc.id,
-          type: 'function',
-          function: { name: tc.name, arguments: tc.arguments },
-        }],
-      };
-      this.repository.addMessage(conversationId, msg);
-    }
-
-    for (const tr of toolResults) {
-      const msg: ConversationMessage = {
-        id: `msg_${crypto.randomUUID().slice(0, 8)}`,
-        role: 'tool',
-        content: tr.content,
-        timestamp: now,
-        provider,
-        toolCallId: tr.id,
-      };
-      this.repository.addMessage(conversationId, msg);
-    }
-  }
-
-  /**
-   * Build the message array for a new request, including all conversation history.
-   */
-  buildRequestMessages(conversationId: string, newMessages: Array<{ role: string; content: unknown }>): Array<{ role: string; content: unknown }> {
+    // Log the failover event in metadata
     const conv = this.repository.get(conversationId);
-    if (!conv) return newMessages;
+    if (conv) {
+      const failoverEvents = (conv.metadata?.failoverEvents as Array<Record<string, unknown>>) ?? [];
+      failoverEvents.push({
+        from: failedProvider,
+        to: newProvider,
+        timestamp: new Date().toISOString(),
+      });
+      this.repository.update(conversationId, {
+        metadata: { ...conv.metadata, failoverEvents, lastFailoverAt: new Date().toISOString() },
+      });
+    }
 
-    const history = conv.messages
-      .filter(m => !m.compressed || m.role === 'system')
-      .map(m => ({
-        role: m.role,
-        content: m.originalContent ? JSON.parse(m.originalContent) : m.content,
-      }));
-
-    return [...history, ...newMessages];
+    this.logger.info(`Conversation ${conversationId} failed over: ${failedProvider} → ${newProvider}`);
   }
 
   /**
-   * Get conversation history for debugging/inspection.
+   * Attach a file to a conversation.
+   */
+  attachFile(
+    conversationId: string,
+    file: { name: string; mimeType: string; data?: string; size: number; type: string },
+  ): string {
+    const fileId = `file_${crypto.randomUUID().slice(0, 8)}`;
+    this.repository.addFile(conversationId, { id: fileId, ...file });
+    return fileId;
+  }
+
+  /**
+   * Get conversation history for debugging.
    */
   get(id: string): Conversation | null {
     return this.repository.get(id);
@@ -224,54 +259,37 @@ export class ConversationService {
   }
 
   /**
-   * Archive old conversations.
-   */
-  archive(days: number): number {
-    return this.repository.archive(days);
-  }
-
-  /**
-   * Update a conversation's provider (for failover).
-   */
-  updateProvider(conversationId: string, newProvider: string): void {
-    this.repository.update(conversationId, { lastProvider: newProvider });
-    this.logger.info(`Conversation ${conversationId} now using provider: ${newProvider}`);
-  }
-
-  /**
-   * Get file attachments for a conversation.
+   * Get file attachments.
    */
   getFiles(conversationId: string) {
     return this.repository.getFiles(conversationId);
   }
 
   /**
-   * Check if context compression is needed and perform it.
+   * Archive old conversations (mark inactive).
    */
+  archive(days: number): number {
+    return this.repository.archive(days);
+  }
+
+  // ─── Private ───
+
   private _maybeCompress(conversationId: string): void {
     const conv = this.repository.get(conversationId);
     if (!conv || !conv.compression?.enabled) return;
 
-    const messages = conv.messages;
-    const totalTokens = conv.tokenUsage.totalTokens;
-
-    if (messages.length > ConversationService.MAX_MESSAGES_BEFORE_COMPRESSION ||
-        totalTokens > ConversationService.MAX_TOKENS_BEFORE_COMPRESSION) {
+    if (conv.messages.length > ConversationService.MAX_MESSAGES_BEFORE_COMPRESSION ||
+        conv.tokenUsage.totalTokens > ConversationService.MAX_TOKENS_BEFORE_COMPRESSION) {
       this._compress(conv);
     }
   }
 
-  /**
-   * Compress conversation context by summarizing old messages.
-   * Preserves the most recent messages and compresses older ones.
-   */
   private _compress(conv: Conversation): void {
     const messages = conv.messages;
     if (messages.length < 4) return;
 
-    const keepRecent = 6; // Keep last 6 messages as-is
+    const keepRecent = 8;
     const compressible = messages.slice(0, messages.length - keepRecent);
-
     if (compressible.length < 2) return;
 
     let tokensSaved = 0;
@@ -281,36 +299,29 @@ export class ConversationService {
       if (msg.compressed) continue;
       if (typeof msg.content !== 'string') continue;
 
-      const content = msg.content;
-      // Store original content
-      msg.originalContent = content;
+      msg.originalContent = msg.content;
 
-      // Compress: truncate long messages, keep structure
-      if (content.length > 200) {
-        msg.content = content.slice(0, 100) + '...[compressed]';
+      if (msg.content.length > 300) {
+        msg.content = msg.content.slice(0, 150) + '...[compressed]';
       }
 
       msg.compressed = true;
       compressedCount++;
-      tokensSaved += Math.ceil(content.length / 4);
+      tokensSaved += Math.ceil(msg.content.length / 4);
     }
 
-    // Update compression stats
-    const compression: CompressionState = {
-      ...conv.compression!,
-      lastCompressedAt: new Date().toISOString(),
-      compressionCount: (conv.compression?.compressionCount || 0) + compressedCount,
-      tokensSaved: (conv.compression?.tokensSaved || 0) + tokensSaved,
-    };
+    if (compressedCount > 0) {
+      const compression: CompressionState = {
+        ...conv.compression!,
+        lastCompressedAt: new Date().toISOString(),
+        compressionCount: (conv.compression?.compressionCount || 0) + compressedCount,
+        tokensSaved: (conv.compression?.tokensSaved || 0) + tokensSaved,
+      };
 
-    // Store compression state in DB
-    const convRow = this.repository.get(conv.id);
-    if (convRow) {
-      // We store compression info in metadata
-      const metadata = { ...convRow.metadata, compression };
-      this.repository.update(conv.id, { metadata });
+      const convRow = this.repository.get(conv.id);
+      if (convRow) {
+        this.repository.update(conv.id, { metadata: { ...convRow.metadata, compression } });
+      }
     }
-
-    this.logger.info(`Conversation ${conv.id} compressed: saved ${tokensSaved} tokens across ${compressedCount} messages`);
   }
 }
