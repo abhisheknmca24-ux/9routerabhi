@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Provider Monitoring</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface-2: #1c2333; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922; --orange: #d4760a;
+    --radius: 8px; --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    padding: 24px; max-width: 1400px; margin: 0 auto; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #79c0ff; }
+
+  /* ─── Summary Cards ─── */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; text-align: center;
+  }
+  .card .value { font-size: 28px; font-weight: 700; }
+  .card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  .text-green { color: var(--green); } .text-red { color: var(--red); } .text-yellow { color: var(--yellow); } .text-accent { color: var(--accent); }
+
+  /* ─── Provider Grid ─── */
+  .provider-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .provider-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; position: relative;
+    transition: border-color 0.3s;
+  }
+  .provider-card.status-healthy { border-left: 4px solid var(--green); }
+  .provider-card.status-degraded { border-left: 4px solid var(--yellow); }
+  .provider-card.status-critical { border-left: 4px solid var(--red); }
+  .provider-card.status-auth_disabled { border-left: 4px solid var(--orange); opacity: 0.7; }
+
+  .provider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .provider-name { font-weight: 600; font-size: 16px; }
+  .provider-status {
+    padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+  }
+  .status-healthy { background: #3fb95022; color: var(--green); }
+  .status-degraded { background: #d2992222; color: var(--yellow); }
+  .status-critical { background: #f8514922; color: var(--red); }
+  .status-auth_disabled { background: #d4760a22; color: var(--orange); }
+
+  .provider-metrics {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+  }
+  .metric {
+    display: flex; flex-direction: column; padding: 8px; background: var(--surface-2);
+    border-radius: 4px;
+  }
+  .metric .val { font-size: 16px; font-weight: 600; }
+  .metric .lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
+
+  .chart-container { margin-top: 12px; height: 80px; }
+
+  /* ─── Charts Section ─── */
+  .charts-section {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
+  }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .chart-card h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-dim); }
+  .chart-card canvas { max-height: 200px; }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .charts-section { grid-template-columns: 1fr; }
+    .provider-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Provider Monitoring</h1>
+  <div class="header-actions">
+    <span id="autoRefreshLabel" style="font-size:13px;color:var(--text-dim)">Auto-refresh: 15s</span>
+    <button class="btn" onclick="toggleAutoRefresh()" id="refreshBtn">Pause</button>
+    <button class="btn btn-primary" onclick="refreshAll()">↻ Refresh Now</button>
+  </div>
+</header>
+
+<div class="summary-grid" id="summaryGrid">
+  <div class="card"><div class="value text-green" id="sumAlive">0</div><div class="label">Alive</div></div>
+  <div class="card"><div class="value text-red" id="sumDead">0</div><div class="label">Dead</div></div>
+  <div class="card"><div class="value text-accent" id="sumRequests">0</div><div class="label">Total Requests</div></div>
+  <div class="card"><div class="value text-yellow" id="sumLatency">0ms</div><div class="label">Avg Latency</div></div>
+  <div class="card"><div class="value" id="sumCost" style="color:#d2a8ff">$0.00</div><div class="label">Total Cost</div></div>
+</div>
+
+<div class="provider-grid" id="providerGrid">
+  <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">Loading provider data...</div>
+</div>
+
+<div class="charts-section">
+  <div class="chart-card"><h3>📈 Latency (last 24h)</h3><canvas id="latencyChart"></canvas></div>
+  <div class="chart-card"><h3>✅ Success Rate (last 24h)</h3><canvas id="successChart"></canvas></div>
+  <div class="chart-card"><h3>🔄 Daily Requests</h3><canvas id="requestsChart"></canvas></div>
+  <div class="chart-card"><h3>💰 Cost (30 days)</h3><canvas id="costChart"></canvas></div>
+</div>
+
+<script>
+// ─── State ───
+let autoRefresh = true;
+let refreshInterval = 15000;
+let timer = null;
+let charts = {};
+let currentData = null;
+
+// ─── API ───
+const API = '/api/monitoring';
+
+// ─── Init ───
+document.addEventListener('DOMContentLoaded', () => {
+  refreshAll();
+  startAutoRefresh();
+});
+
+// ─── Data Loading ───
+async function refreshAll() {
+  try {
+    const [statusRes, summaryRes] = await Promise.all([
+      fetch(`${API}/status`),
+      fetch(`${API}/summary`),
+    ]);
+    const status = await statusRes.json();
+    const summary = await summaryRes.json();
+
+    currentData = { status, summary };
+    renderSummary(summary);
+    renderProviderCards(status);
+
+    // Load history for each provider for charts
+    if (status.length > 0) {
+      const historyPromises = status.map(s =>
+        fetch(`${API}/provider/${s.providerId}/history?hours=24`).then(r => r.json())
+      );
+      const histories = await Promise.all(historyPromises);
+      buildCharts(status, histories);
+    }
+  } catch (err) {
+    document.getElementById('providerGrid').innerHTML =
+      `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">
+        Failed to load data — is the monitoring engine running on port 20133?
+      </div>`;
+  }
+}
+
+// ─── Summary ───
+function renderSummary(summary) {
+  document.getElementById('sumAlive').textContent = summary.alive ?? 0;
+  document.getElementById('sumDead').textContent = summary.dead ?? 0;
+  document.getElementById('sumRequests').textContent = summary.totalRequests ?? 0;
+  document.getElementById('sumLatency').textContent = Math.round(summary.avgLatency ?? 0) + 'ms';
+  document.getElementById('sumCost').textContent = '$' + (summary.totalCost ?? 0).toFixed(4);
+}
+
+// ─── Provider Cards ───
+function renderProviderCards(providers) {
+  if (!providers || providers.length === 0) {
+    document.getElementById('providerGrid').innerHTML =
+      `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">
+        No provider data yet. Report some requests to see metrics.
+      </div>`;
+    return;
+  }
+
+  document.getElementById('providerGrid').innerHTML = providers.map(p => `
+    <div class="provider-card status-${p.status}">
+      <div class="provider-header">
+        <span class="provider-name">${escapeHtml(p.providerId)}</span>
+        <span class="provider-status status-${p.status}">${p.status}</span>
+      </div>
+      <div class="provider-metrics">
+        <div class="metric">
+          <span class="val ${p.alive ? 'text-green' : 'text-red'}">${p.alive ? '● Alive' : '○ Dead'}</span>
+          <span class="lbl">Status</span>
+        </div>
+        <div class="metric">
+          <span class="val">${p.latency.toFixed(0)}ms</span>
+          <span class="lbl">Avg Latency</span>
+        </div>
+        <div class="metric">
+          <span class="val">${(p.successRate * 100).toFixed(1)}%</span>
+          <span class="lbl">Success Rate</span>
+        </div>
+        <div class="metric">
+          <span class="val text-yellow">${p.count429}</span>
+          <span class="lbl">429 Count</span>
+        </div>
+        <div class="metric">
+          <span class="val text-orange" style="color:var(--orange)">${p.count502}</span>
+          <span class="lbl">502 Count</span>
+        </div>
+        <div class="metric">
+          <span class="val">${p.dailyRequests}</span>
+          <span class="lbl">Daily Requests</span>
+        </div>
+        <div class="metric">
+          <span class="val">${formatTokens(p.tokens)}</span>
+          <span class="lbl">Tokens</span>
+        </div>
+        <div class="metric">
+          <span class="val" style="color:#d2a8ff">$${p.cost.toFixed(4)}</span>
+          <span class="lbl">Cost</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim)">
+        Health Score: ${(p.healthScore * 100).toFixed(0)}% &middot; ${p.timestamp ? new Date(p.timestamp).toLocaleTimeString() : '—'}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─── Charts ───
+function buildCharts(providers, histories) {
+  // Destroy old charts
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch {} });
+
+  const colors = ['#58a6ff', '#3fb950', '#d29922', '#f85149', '#d2a8ff', '#d4760a', '#79c0ff', '#56d4dd'];
+  const labels = getTimeLabels(histories);
+
+  // Latency chart
+  const latencyCtx = document.getElementById('latencyChart').getContext('2d');
+  charts.latency = new Chart(latencyCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: providers.map((p, i) => ({
+        label: p.providerId,
+        data: getHistorySeries(histories[i], 'latency'),
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '33',
+        borderWidth: 2, fill: false, tension: 0.3, pointRadius: 0,
+      })),
+    },
+    options: chartOptions('Latency (ms)', false),
+  });
+
+  // Success rate chart
+  const successCtx = document.getElementById('successChart').getContext('2d');
+  charts.success = new Chart(successCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: providers.map((p, i) => ({
+        label: p.providerId,
+        data: getHistorySeries(histories[i], 'successRate'),
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '33',
+        borderWidth: 2, fill: false, tension: 0.3, pointRadius: 0,
+      })),
+    },
+    options: chartOptions('Success Rate', true, 0, 1),
+  });
+
+  // Daily requests chart (from daily stats)
+  const allDaily = histories.flatMap(h => h.daily || []);
+  const dailyLabels = [...new Set(allDaily.map(d => d.date))].sort();
+  const dailyByProvider: Record<string, number[]> = {};
+  providers.forEach(p => { dailyByProvider[p.providerId] = dailyLabels.map(date => {
+    const day = (histories.find(h => h.daily?.some(d => d.providerId === p.providerId))?.daily || []).find(d => d.date === date && d.providerId === p.providerId);
+    return day ? day.totalRequests : 0;
+  })});
+
+  const reqCtx = document.getElementById('requestsChart').getContext('2d');
+  charts.requests = new Chart(reqCtx, {
+    type: 'bar',
+    data: {
+      labels: dailyLabels,
+      datasets: providers.map((p, i) => ({
+        label: p.providerId,
+        data: dailyByProvider[p.providerId],
+        backgroundColor: colors[i % colors.length] + '88',
+        borderColor: colors[i % colors.length],
+        borderWidth: 1,
+      })),
+    },
+    options: chartOptions('Requests', true),
+  });
+
+  // Cost chart (30-day stacked)
+  const costByProvider: Record<string, number[]> = {};
+  providers.forEach(p => { costByProvider[p.providerId] = dailyLabels.map(date => {
+    const day = allDaily.find(d => d.date === date && d.providerId === p.providerId);
+    return day ? day.totalCost : 0;
+  })});
+
+  const costCtx = document.getElementById('costChart').getContext('2d');
+  charts.cost = new Chart(costCtx, {
+    type: 'bar',
+    data: {
+      labels: dailyLabels,
+      datasets: providers.map((p, i) => ({
+        label: p.providerId,
+        data: costByProvider[p.providerId],
+        backgroundColor: colors[i % colors.length] + '88',
+        borderColor: colors[i % colors.length],
+        borderWidth: 1,
+      })),
+    },
+    options: chartOptions('Cost ($)', true),
+  });
+}
+
+function getTimeLabels(histories) {
+  const allMyPoints = histories.flatMap(h => h.history || []);
+  const labels = allMyPoints.map(p => {
+    const d = new Date(p.timestamp);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  });
+  // Return unique sorted labels
+  return [...new Set(labels)].slice(-24);
+}
+
+function getHistorySeries(history, field) {
+  if (!history?.history) return [];
+  const points = history.history;
+  const byTime: Record<string, number> = {};
+  points.forEach(p => {
+    const d = new Date(p.timestamp);
+    const key = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    byTime[key] = p[field] ?? 0;
+  });
+  const labels = [...new Set(points.map(p => {
+    const d = new Date(p.timestamp);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  }))].sort();
+  return labels.map(l => byTime[l] ?? null);
+}
+
+function chartOptions(ylabel, formatPercent = false, min?, max?) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } },
+           grid: { color: '#30363d33' } },
+      y: {
+        beginAtZero: true, min, max,
+        ticks: { color: '#8b949e', font: { size: 10 },
+                 callback: (v) => formatPercent ? (v * 100).toFixed(0) + '%' : v },
+        grid: { color: '#30363d33' },
+      },
+    },
+  };
+}
+
+// ─── Auto Refresh ───
+function startAutoRefresh() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(() => {
+    if (autoRefresh) refreshAll();
+  }, refreshInterval);
+}
+
+function toggleAutoRefresh() {
+  autoRefresh = !autoRefresh;
+  document.getElementById('refreshBtn').textContent = autoRefresh ? 'Pause' : 'Resume';
+  document.getElementById('autoRefreshLabel').textContent = autoRefresh ? `Auto-refresh: ${refreshInterval/1000}s` : 'Paused';
+}
+
+// ─── Utilities ───
+function escapeHtml(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function formatTokens(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toString();
+}
+</script>
+</body>
+</html>

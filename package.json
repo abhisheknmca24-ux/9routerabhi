@@ -19,7 +19,9 @@
     "install:all": "npm install && cd health-engine && npm install && cd .. && cd routing-engine && npm install && cd .. && cd observability-engine && npm install"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "9router": "^0.5.18",
+    "better-sqlite3": "^12.11.1",
     "express": "^5.2.1"
   },
   "devDependencies": {
