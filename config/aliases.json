@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "description": "Model alias configuration — maps friendly model names to internal combo profiles",
+  "aliases": [
+    {
+      "name": "claude-sonnet-4-5",
+      "target": "Coding",
+      "description": "Best for code generation and completion"
+    },
+    {
+      "name": "claude-sonnet-4",
+      "target": "Balanced",
+      "description": "Best overall quality/speed balance"
+    },
+    {
+      "name": "claude-opus-4",
+      "target": "Research",
+      "description": "Best for deep reasoning and complex tasks"
+    },
+    {
+      "name": "claude-opus-4-5",
+      "target": "Reasoning",
+      "description": "Best for logical deduction and analysis"
+    },
+    {
+      "name": "claude-haiku-3-5",
+      "target": "Fast",
+      "description": "Best for low-latency responses"
+    },
+    {
+      "name": "claude-haiku-4",
+      "target": "Fast",
+      "description": "Best for low-latency responses"
+    },
+    {
+      "name": "claude-haiku-4-5",
+      "target": "Chat",
+      "description": "Best for general conversation"
+    },
+    {
+      "name": "gpt-4.1",
+      "target": "Balanced",
+      "description": "OpenAI-style general purpose"
+    },
+    {
+      "name": "gpt-4o",
+      "target": "Coding",
+      "description": "OpenAI-style code generation"
+    },
+    {
+      "name": "gpt-4o-mini",
+      "target": "Fast",
+      "description": "OpenAI-style lightweight"
+    },
+    {
+      "name": "gemini-2.5-pro",
+      "target": "Research",
+      "description": "Google DeepMind research tasks"
+    },
+    {
+      "name": "gemini-2.5-flash",
+      "target": "Fast",
+      "description": "Google DeepMind fast responses"
+    },
+    {
+      "name": "deepseek-v3",
+      "target": "Reasoning",
+      "description": "DeepSeek reasoning tasks"
+    },
+    {
+      "name": "deepseek-r1",
+      "target": "Research",
+      "description": "DeepSeek research tasks"
+    },
+    {
+      "name": "llama-4",
+      "target": "Balanced",
+      "description": "Meta general purpose"
+    },
+    {
+      "name": "mistral-large",
+      "target": "Reasoning",
+      "description": "Mistral reasoning tasks"
+    }
+  ]
+}

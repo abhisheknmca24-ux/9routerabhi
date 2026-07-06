@@ -21,6 +21,7 @@ import https from 'node:https';
 import { URL as NodeURL } from 'node:url';
 import { type HttpAgent } from '../performance/http-agent.js';
 import { AnthropicFormatter, type AnthropicMessage } from '../formatter/anthropic-formatter.js';
+import { ModelAliasManager } from '../model-alias/model-alias-manager.js';
 
 export interface AnthropicControllerConfig {
   /** URL of the upstream OpenAI-compatible gateway */
@@ -33,12 +34,15 @@ export interface AnthropicControllerConfig {
 
 export class AnthropicController {
   private readonly formatter: AnthropicFormatter;
+  private readonly aliasManager: ModelAliasManager;
 
   constructor(
     private readonly httpAgent: HttpAgent,
     private readonly config: AnthropicControllerConfig,
+    aliasConfigPath?: string,
   ) {
     this.formatter = new AnthropicFormatter();
+    this.aliasManager = new ModelAliasManager(aliasConfigPath);
   }
 
   /**
@@ -373,6 +377,12 @@ export class AnthropicController {
   private _toOpenAI(anthropicBody: Record<string, unknown>): Record<string, unknown> {
     const anthropicMessages = (anthropicBody.messages as AnthropicMessage[]) ?? [];
     const system = anthropicBody.system;
+    const clientModel = (anthropicBody.model as string) ?? '';
+
+    // Resolve alias: if the client sends a friendly model name like
+    // "claude-sonnet-4-5", translate it to the internal combo "Coding".
+    // The routing engine never sees the alias — only the resolved target.
+    const resolvedModel = this.aliasManager.resolve(clientModel) ?? clientModel;
 
     const openaiMessages: Array<Record<string, unknown>> = [];
 
@@ -435,7 +445,7 @@ export class AnthropicController {
     }
 
     return {
-      model: anthropicBody.model,
+      model: resolvedModel,
       messages: openaiMessages,
       max_tokens: anthropicBody.max_tokens ?? 4096,
       temperature: anthropicBody.temperature,
