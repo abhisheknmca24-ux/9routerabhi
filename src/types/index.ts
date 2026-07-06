@@ -6,3 +6,4 @@ export * from './config.types.js';
 export * from './security.types.js';
 export * from './logger.types.js';
 export * from './repository.types.js';
+export * from './alias.types.js';

@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { ConsoleLogger } from '../../logger/console-logger.js';
 import { SecurityIntegration } from '../../security/security-integration.js';
+import { AliasRepository } from '../../repositories/alias-repository.js';
+import { AliasService } from '../../services/alias.service.js';
 import { createEngineServer } from '../engine-server.js';
-import { RoutingService } from './routing.service.js';
+import { RoutingService, type AliasResolver } from './routing.service.js';
 import { createRoutingRouter } from './routes.js';
 
 const PORT = parseInt(process.env.ROUTING_ENGINE_PORT || '20130', 10);
@@ -14,9 +16,18 @@ const security = new SecurityIntegration({
   logger,
 });
 
+// Wire alias resolution into routing
+const configDir = path.resolve(process.env.CONFIG_DIR || path.join(process.cwd(), 'config'));
+const aliasRepo = new AliasRepository(logger, configDir);
+const aliasService = new AliasService(aliasRepo, logger);
+const aliasResolver: AliasResolver = {
+  resolve: (name) => aliasService.resolveAlias(name),
+};
+
 const routingService = new RoutingService(
-  path.resolve(process.env.CONFIG_DIR || path.join(process.cwd(), 'config')),
+  configDir,
   logger,
+  aliasResolver,
 );
 
 createEngineServer({

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gateway Aliases</title>
+<style>
+  /* ─── Reset & Variables ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  html[data-theme="light"] {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --surface-2: #eaeef2;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-dim: #656d76;
+    --accent: #0969da;
+    --accent-hover: #0550ae;
+    --green: #1a7f37;
+    --red: #cf222e;
+    --yellow: #9a6700;
+  }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ─── Header ─── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ─── Theme Toggle ─── */
+  .theme-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .theme-toggle:hover { border-color: var(--accent); }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); color: #fff; }
+  .btn-danger { border-color: var(--red); color: var(--red); }
+  .btn-danger:hover:not(:disabled) { background: var(--red); color: #fff; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  /* ─── Search ─── */
+  .search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .search-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+
+  /* ─── Stats bar ─── */
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat strong { color: var(--text); }
+
+  /* ─── Table ─── */
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  th {
+    background: var(--surface-2);
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-2); }
+  .empty-row td {
+    text-align: center;
+    padding: 40px 12px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  /* ─── Toggle Switch ─── */
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    display: inline-block;
+  }
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .toggle .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .toggle .slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .toggle input:checked + .slider { background: var(--green); }
+  .toggle input:checked + .slider::before { transform: translateX(16px); }
+
+  /* ─── Badges ─── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-combo { background: #1f6feb33; color: var(--accent); }
+  .badge-model { background: #3fb95033; color: var(--green); }
+  .badge-enabled { background: #3fb95022; color: var(--green); }
+  .badge-disabled { background: #f8514922; color: var(--red); }
+
+  /* ─── Modal ─── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 90%;
+    max-width: 520px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .modal .form-group { margin-bottom: 14px; }
+  .modal label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--text-dim);
+  }
+  .modal input, .modal select, .modal textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    font-family: var(--font);
+  }
+  .modal input:focus, .modal select:focus, .modal textarea:focus { border-color: var(--accent); }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal .error { color: var(--red); font-size: 13px; margin-top: 4px; }
+  .modal .form-error { color: var(--red); font-size: 13px; margin-bottom: 12px; }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  /* ─── Toast notifications ─── */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .toast-success { background: var(--green); color: #fff; }
+  .toast-error { background: var(--red); color: #fff; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    header { flex-direction: column; align-items: stretch; }
+    .header-actions { flex-wrap: wrap; }
+    .stats { flex-direction: column; }
+    .table-wrap { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔀 Gateway Aliases</h1>
+  <div class="header-actions">
+    <input type="file" id="importFile" accept=".json" style="display:none">
+    <button class="btn" onclick="document.getElementById('importFile').click()">📥 Import</button>
+    <button class="btn" onclick="exportAliases()">📤 Export</button>
+    <button class="btn btn-primary" onclick="openCreate()">+ New Alias</button>
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
+  </div>
+</header>
+
+<div class="search-bar">
+  <input class="search-input" id="searchInput" placeholder="Search aliases by name, target, or description..." oninput="debounceSearch()">
+  <button class="btn" onclick="loadAliases()">Clear</button>
+</div>
+
+<div class="stats">
+  <div class="stat">Total: <strong id="statTotal">0</strong></div>
+  <div class="stat">Enabled: <strong id="statEnabled">0</strong></div>
+  <div class="stat">Disabled: <strong id="statDisabled">0</strong></div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">Status</th>
+        <th>Alias</th>
+        <th>Target</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th style="width:130px">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr class="empty-row"><td colspan="6">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Create Alias</h2>
+    <div id="modalErrors" class="form-error" style="display:none"></div>
+    <div class="form-group">
+      <label>Alias Name</label>
+      <input id="inputName" placeholder="e.g. claude-sonnet-4-5" maxlength="64">
+      <div class="error" id="errorName"></div>
+    </div>
+    <div class="form-group">
+      <label>Target Type</label>
+      <select id="inputTargetType" onchange="updateTargetHelp()">
+        <option value="combo">Combo Profile</option>
+        <option value="model">Direct Model ID</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label id="targetLabel">Target Combo Profile</label>
+      <input id="inputTarget" placeholder="e.g. Coding" list="comboList">
+      <datalist id="comboList">
+        <option value="Coding"><option value="Reasoning"><option value="Chat">
+        <option value="Balanced"><option value="Vision"><option value="Research">
+        <option value="Fast"><option value="Long_Context"><option value="Planning">
+      </datalist>
+      <div class="error" id="errorTarget"></div>
+    </div>
+    <div class="form-group">
+      <label>Description (optional)</label>
+      <textarea id="inputDescription" placeholder="What this alias is for..."></textarea>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="inputEnabled" checked>
+        Enabled on creation
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modalSaveBtn" onclick="saveAlias()">Create Alias</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ─── State ───
+let editingName = null;
+let searchTimer = null;
+
+// ─── API base ───
+const API = '/api/aliases';
+
+// ─── Load ───
+async function loadAliases() {
+  const search = document.getElementById('searchInput').value.trim();
+  const url = search ? `${API}?search=${encodeURIComponent(search)}` : API;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    renderTable(data.aliases || []);
+    updateStats(data.aliases || []);
+  } catch (err) {
+    showError('Failed to load aliases');
+    document.getElementById('tableBody').innerHTML =
+      '<tr class="empty-row"><td colspan="6">Failed to load. Is the server running?</td></tr>';
+  }
+}
+
+// ─── Render ───
+function renderTable(aliases) {
+  const tbody = document.getElementById('tableBody');
+  if (aliases.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No aliases found. Create one to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = aliases.map(a => `
+    <tr>
+      <td>
+        <label class="toggle">
+          <input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="toggleAlias('${escapeHtml(a.name)}', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </td>
+      <td><code>${escapeHtml(a.name)}</code></td>
+      <td>${escapeHtml(a.target)}</td>
+      <td><span class="badge badge-${a.targetType}">${a.targetType}</span></td>
+      <td style="color:var(--text-dim)">${escapeHtml(a.description || '—')}</td>
+      <td>
+        <button class="btn btn-sm" onclick="openEdit('${escapeHtml(a.name)}')">✏️ Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="confirmDelete('${escapeHtml(a.name)}')">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateStats(aliases) {
+  document.getElementById('statTotal').textContent = aliases.length;
+  document.getElementById('statEnabled').textContent = aliases.filter(a => a.enabled).length;
+  document.getElementById('statDisabled').textContent = aliases.filter(a => !a.enabled).length;
+}
+
+// ─── Toggle ───
+async function toggleAlias(name, enabled) {
+  try {
+    const res = await fetch(`${API}/${encodeURIComponent(name)}/toggle`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showError(err.error || 'Toggle failed');
+    }
+    // reload row state
+    loadAliases();
+  } catch {
+    showError('Toggle failed');
+    loadAliases();
+  }
+}
+
+// ─── Search ───
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadAliases, 250);
+}
+
+// ─── Create / Edit Modal ───
+function openCreate() {
+  editingName = null;
+  document.getElementById('modalTitle').textContent = 'Create Alias';
+  document.getElementById('modalSaveBtn').textContent = 'Create Alias';
+  document.getElementById('inputName').value = '';
+  document.getElementById('inputName').disabled = false;
+  document.getElementById('inputTarget').value = 'Coding';
+  document.getElementById('inputTargetType').value = 'combo';
+  document.getElementById('inputDescription').value = '';
+  document.getElementById('inputEnabled').checked = true;
+  clearModalErrors();
+  document.getElementById('modalOverlay').classList.add('active');
+  updateTargetHelp();
+}
+
+async function openEdit(name) {
+  try {
+    const res = await fetch(`${API}/${encodeURIComponent(name)}`);
+    if (!res.ok) { showError('Alias not found'); return; }
+    const alias = await res.json();
+    editingName = alias.name;
+    document.getElementById('modalTitle').textContent = 'Edit Alias';
+    document.getElementById('modalSaveBtn').textContent = 'Save Changes';
+    document.getElementById('inputName').value = alias.name;
+    document.getElementById('inputName').disabled = true;
+    document.getElementById('inputTarget').value = alias.target;
+    document.getElementById('inputTargetType').value = alias.targetType;
+    document.getElementById('inputDescription').value = alias.description || '';
+    document.getElementById('inputEnabled').checked = alias.enabled;
+    clearModalErrors();
+    document.getElementById('modalOverlay').classList.add('active');
+    updateTargetHelp();
+  } catch {
+    showError('Failed to load alias');
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+  editingName = null;
+}
+
+function updateTargetHelp() {
+  const type = document.getElementById('inputTargetType').value;
+  document.getElementById('targetLabel').textContent =
+    type === 'combo' ? 'Target Combo Profile' : 'Target Model ID';
+  document.getElementById('inputTarget').placeholder =
+    type === 'combo' ? 'e.g. Coding' : 'e.g. openrouter/model-id';
+}
+
+async function saveAlias() {
+  clearModalErrors();
+  const name = document.getElementById('inputName').value.trim();
+  const target = document.getElementById('inputTarget').value.trim();
+  const targetType = document.getElementById('inputTargetType').value;
+  const description = document.getElementById('inputDescription').value.trim();
+  const enabled = document.getElementById('inputEnabled').checked;
+
+  if (editingName) {
+    // Update
+    try {
+      const res = await fetch(`${API}/${encodeURIComponent(editingName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, targetType, description, enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.errors) showFieldErrors(data.errors);
+        else showError(data.error || 'Update failed');
+        return;
+      }
+      showSuccess('Alias updated');
+      closeModal();
+      loadAliases();
+    } catch { showError('Update failed'); }
+  } else {
+    // Create
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, target, targetType, description, enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.errors) showFieldErrors(data.errors);
+        else showError(data.error || 'Create failed');
+        return;
+      }
+      showSuccess('Alias created');
+      closeModal();
+      loadAliases();
+    } catch { showError('Create failed'); }
+  }
+}
+
+function clearModalErrors() {
+  document.getElementById('modalErrors').style.display = 'none';
+  document.getElementById('modalErrors').textContent = '';
+  document.getElementById('errorName').textContent = '';
+  document.getElementById('errorTarget').textContent = '';
+}
+
+function showFieldErrors(errors) {
+  if (!errors) return;
+  const general = errors.filter(e => !e.field || e.field === 'root');
+  if (general.length > 0) {
+    document.getElementById('modalErrors').textContent = general.map(e => e.message).join('; ');
+    document.getElementById('modalErrors').style.display = 'block';
+  }
+  errors.forEach(e => {
+    if (e.field === 'name') document.getElementById('errorName').textContent = e.message;
+    if (e.field === 'target') document.getElementById('errorTarget').textContent = e.message;
+  });
+}
+
+// ─── Delete ───
+function confirmDelete(name) {
+  if (!confirm(`Delete alias "${name}"? This cannot be undone.`)) return;
+  fetch(`${API}/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    .then(res => {
+      if (res.ok) { showSuccess('Alias deleted'); loadAliases(); }
+      else showError('Delete failed');
+    })
+    .catch(() => showError('Delete failed'));
+}
+
+// ─── Import / Export ───
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const aliases = data.aliases || data;
+    const overwrite = confirm('Overwrite existing aliases with same names? Click OK to overwrite, Cancel to skip duplicates.');
+    const res = await fetch(`${API}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aliases, overwrite }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      const msg = result.errors ? result.errors.map(e => e.message).join('; ') : 'Import failed';
+      showError(msg);
+    } else {
+      showSuccess(`Imported ${result.imported} aliases (${result.skipped} skipped, ${result.errors?.length || 0} errors)`);
+      loadAliases();
+    }
+  } catch (err) {
+    showError('Invalid JSON file: ' + err.message);
+  }
+  e.target.value = '';
+});
+
+function exportAliases() {
+  window.open(`${API}/export/download`, '_blank');
+}
+
+// ─── Theme ───
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('themeBtn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+}
+
+// ─── Toast notifications ───
+function showSuccess(msg) {
+  showToast(msg, 'toast-success');
+}
+function showError(msg) {
+  showToast(msg, 'toast-error');
+}
+function showToast(msg, cls) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${cls}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ─── Utilities ───
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── Init ───
+document.addEventListener('DOMContentLoaded', loadAliases);
+
+// Close modal on overlay click
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// Enter key in modal
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Enter' && document.getElementById('modalOverlay').classList.contains('active')) {
+    const tag = document.activeElement?.tagName;
+    if (tag !== 'TEXTAREA') saveAlias();
+  }
+});
+</script>
+</body>
+</html>

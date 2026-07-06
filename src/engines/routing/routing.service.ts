@@ -7,6 +7,10 @@ import { RoutingPolicySchema } from '../../config/schemas/routing.schema.js';
 import { ProvidersFileSchema } from '../../config/schemas/provider.schema.js';
 import { ConfigValidationError } from '../../config/config-loader.js';
 
+export interface AliasResolver {
+  resolve(name: string): { target: string; targetType: string } | null;
+}
+
 export class RoutingService {
   private routingPolicy: RoutingPolicy;
   private providers: ProvidersFile;
@@ -17,6 +21,7 @@ export class RoutingService {
   constructor(
     private readonly configDir: string,
     private readonly logger: Logger,
+    private readonly aliasResolver?: AliasResolver,
   ) {
     this.routingPath = path.join(configDir, 'routing', 'routing-policy.json');
     this.providersPath = path.join(configDir, 'providers', 'providers.json');
@@ -44,6 +49,27 @@ export class RoutingService {
   }
 
   resolveModel(model: string): RouteResolution | null {
+    // Check if model is an alias first
+    if (this.aliasResolver && !model.includes('/')) {
+      const alias = this.aliasResolver.resolve(model);
+      if (alias) {
+        this.logger.debug(`Alias resolved: ${model} → ${alias.target} (${alias.targetType})`);
+        // If alias points to a combo profile, return it as an alias resolution
+        // If it points to a direct model, recurse
+        if (alias.targetType === 'model' && alias.target.includes('/')) {
+          return this.resolveModel(alias.target);
+        }
+        return {
+          model: alias.target,
+          provider: 'alias',
+          tier: this.routingPolicy.defaultTier,
+          endpoint: undefined,
+          priority: 0,
+          models: [alias.target],
+        };
+      }
+    }
+
     const providerId = model.split('/')[0];
     const provider = this.providers.providers.find(p => p.id === providerId);
 
