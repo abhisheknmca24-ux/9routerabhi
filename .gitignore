@@ -76,13 +76,11 @@ temp/
 *.bak
 *.~
 
-# --- Build & Dist ---
+# --- TypeScript Build ---
 dist/
-build/
-.next/
-out/
-.next-cli-build/
 *.tsbuildinfo
+coverage/
+
 
 # --- Coverage ---
 coverage/

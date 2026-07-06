@@ -6,8 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev:ts": "tsx src/gateway/server.ts",
     "test": "node tests/acceptance-test.js",
     "test:failover": "node tests/final-failover-test.js",
+    "test:ts": "vitest run",
+    "test:ts:watch": "vitest",
     "clean": "node -e \"require('fs').readdirSync('logs').forEach(f=>{try{require('fs').unlinkSync('logs/'+f)}catch(e){}})\"",
     "backup": "node scripts/backup.js",
     "start:all": "npm install && cd health-engine && npm install && cd .. && cd routing-engine && npm install && cd .. && cd observability-engine && npm install && cd .. && start http://localhost:20128 && node server.js & node health-engine/server.js & node routing-engine/server.js & node observability-engine/server.js",
@@ -17,7 +22,14 @@
     "9router": "^0.5.18",
     "express": "^5.2.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.0",
+    "tsx": "^4.23.0",
+    "typescript": "5.7",
+    "vitest": "^4.1.10",
+    "zod": "^3.25.76"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
