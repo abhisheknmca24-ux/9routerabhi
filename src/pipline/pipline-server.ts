@@ -90,7 +90,7 @@ function buildPipeline(): PipelineEngine {
   pipeline.addStage(new ProviderHealthStage(healthTracker));
   pipeline.addStage(new RetryStage());
   pipeline.addStage(new FallbackStage());
-  pipeline.addStage(new ProviderExecutionStage(httpAgent, GATEWAY_URL));
+  pipeline.addStage(new ProviderExecutionStage(httpAgent, GATEWAY_URL, healthTracker));
   pipeline.addStage(new ResponseFormatterStage());
   pipeline.addStage(new StreamingStage());
   pipeline.addStage(new AnalyticsStage(monitoring, healthTracker));
