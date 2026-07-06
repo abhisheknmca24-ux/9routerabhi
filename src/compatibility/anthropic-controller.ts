@@ -20,8 +20,9 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL as NodeURL } from 'node:url';
 import { type HttpAgent } from '../performance/http-agent.js';
-import { AnthropicFormatter, type AnthropicMessage } from '../formatter/anthropic-formatter.js';
+import { AnthropicFormatter } from '../formatter/anthropic-formatter.js';
 import { ModelAliasManager } from '../model-alias/model-alias-manager.js';
+import { anthropicToOpenAI, extractFromOpenAI, extractUsage } from '../translator/anthropic-to-openai.js';
 
 export interface AnthropicControllerConfig {
   /** URL of the upstream OpenAI-compatible gateway */
@@ -73,9 +74,15 @@ export class AnthropicController {
   // ═══════════════════════════════════════════════════════════════
 
   private async _handleNonStream(res: ServerResponse, body: Record<string, unknown>): Promise<void> {
-    const openaiBody = this._toOpenAI(body);
+    // Translate Anthropic → OpenAI using pure translator (no side effects)
+    const clientModel = (body.model as string) ?? '';
+    const resolvedModel = this.aliasManager.resolve(clientModel) ?? clientModel;
+    const anthropicReq = body as unknown as import('../translator/anthropic-to-openai.js').AnthropicRequest;
+    anthropicReq.model = resolvedModel;
+    const openaiBody = anthropicToOpenAI(anthropicReq);
     openaiBody.stream = false;
 
+    // Call upstream gateway (IO — the only side effect in this handler)
     let upstreamResponse;
     try {
       upstreamResponse = await this.httpAgent.post(
@@ -93,12 +100,11 @@ export class AnthropicController {
       return;
     }
 
-    const upstreamData = upstreamResponse.data as Record<string, unknown> | undefined;
-    const choice = (upstreamData?.choices as Array<Record<string, unknown>> | undefined)?.[0];
+    const upstreamData = upstreamResponse.data as import('../translator/anthropic-to-openai.js').OpenAIResponse;
+    const choice = upstreamData?.choices?.[0];
 
     if (upstreamResponse.status >= 400 || !choice) {
-      const errorMessage = (upstreamData?.error as Record<string, unknown> | undefined)?.message as string
-        ?? `Upstream returned ${upstreamResponse.status}`;
+      const errorMessage = upstreamData?.error?.message ?? `Upstream returned ${upstreamResponse.status}`;
       const anthropicErrorType = upstreamResponse.status === 429 ? 'rate_limit_error'
         : upstreamResponse.status === 401 ? 'authentication_error'
         : upstreamResponse.status === 403 ? 'permission_error'
@@ -111,23 +117,17 @@ export class AnthropicController {
       return;
     }
 
-    const message = choice?.message as Record<string, unknown> | undefined;
-    const content = (message?.content as string) ?? '';
-    const finishReason = (choice?.finish_reason as string) ?? 'stop';
-    const toolCalls = (message?.tool_calls as Array<{ id: string; function: { name: string; arguments: string } }> | undefined);
-    const usage = upstreamData?.usage as Record<string, unknown> | undefined;
+    // Extract data using pure extractor functions
+    const { content, finishReason, toolCalls } = extractFromOpenAI(choice);
+    const { inputTokens, outputTokens } = extractUsage(upstreamData);
 
     const response = this.formatter.formatResponse({
-      model: (body.model as string) ?? '',
+      model: clientModel,
       content,
       finishReason,
-      inputTokens: (usage?.prompt_tokens as number) ?? 0,
-      outputTokens: (usage?.completion_tokens as number) ?? 0,
-      tools: toolCalls?.map(tc => ({
-        id: tc.id,
-        name: tc.function?.name ?? '',
-        arguments: tc.function?.arguments ?? '{}',
-      })),
+      inputTokens,
+      outputTokens,
+      tools: toolCalls,
     });
 
     res.statusCode = 200;
@@ -141,9 +141,13 @@ export class AnthropicController {
   // ═══════════════════════════════════════════════════════════════
 
   private async _handleStream(res: ServerResponse, body: Record<string, unknown>): Promise<void> {
-    const model = (body.model as string) ?? '';
-    const openaiBase = this._toOpenAI(body);
+    const clientModel = (body.model as string) ?? '';
+    const resolvedModel = this.aliasManager.resolve(clientModel) ?? clientModel;
+    const anthropicReq = body as unknown as import('../translator/anthropic-to-openai.js').AnthropicRequest;
+    anthropicReq.model = resolvedModel;
+    const openaiBase = anthropicToOpenAI(anthropicReq);
     openaiBase.stream = true;
+    const model = clientModel;
 
     // SSE headers
     res.statusCode = 200;
@@ -181,7 +185,7 @@ export class AnthropicController {
       try {
         await this._streamFromProvider(
           upstreamUrl,
-          openaiBase,
+          openaiBase as unknown as Record<string, unknown>,
           // onChunk: raw OpenAI delta
           (delta: string) => {
             if (!delta) return;
@@ -378,88 +382,4 @@ export class AnthropicController {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  Format Translation
-  // ═══════════════════════════════════════════════════════════════
-
-  private _toOpenAI(anthropicBody: Record<string, unknown>): Record<string, unknown> {
-    const anthropicMessages = (anthropicBody.messages as AnthropicMessage[]) ?? [];
-    const system = anthropicBody.system;
-    const clientModel = (anthropicBody.model as string) ?? '';
-
-    // Resolve alias: if the client sends a friendly model name like
-    // "claude-sonnet-4-5", translate it to the internal combo "Coding".
-    // The routing engine never sees the alias — only the resolved target.
-    const resolvedModel = this.aliasManager.resolve(clientModel) ?? clientModel;
-
-    const openaiMessages: Array<Record<string, unknown>> = [];
-
-    if (system) {
-      if (typeof system === 'string') {
-        openaiMessages.push({ role: 'system', content: system });
-      } else if (Array.isArray(system)) {
-        const systemText = system
-          .map((b: Record<string, unknown>) => b.text as string ?? '')
-          .filter(Boolean)
-          .join('\n');
-        if (systemText) {
-          openaiMessages.push({ role: 'system', content: systemText });
-        }
-      }
-    }
-
-    for (const msg of anthropicMessages) {
-      const openaiMsg: Record<string, unknown> = {
-        role: msg.role === 'assistant' ? 'assistant' : 'user',
-      };
-
-      if (typeof msg.content === 'string') {
-        openaiMsg.content = msg.content;
-      } else if (Array.isArray(msg.content)) {
-        const textParts: string[] = [];
-        for (const block of msg.content) {
-          if (block.type === 'text' && 'text' in block) {
-            textParts.push((block as { text: string }).text);
-          } else if (block.type === 'image' && 'source' in block) {
-            const src = (block as { source: { type: string; media_type: string; data?: string; url?: string } }).source;
-            if (src.type === 'base64' && src.data) {
-              textParts.push(`data:${src.media_type};base64,${src.data}`);
-            } else if (src.type === 'url' && src.url) {
-              textParts.push(src.url);
-            }
-          } else if (block.type === 'tool_use') {
-            const tu = block as { id: string; name: string; input: Record<string, unknown> };
-            openaiMsg.tool_calls = [{
-              id: tu.id,
-              type: 'function',
-              function: { name: tu.name, arguments: JSON.stringify(tu.input) },
-            }];
-          } else if (block.type === 'tool_result') {
-            const tr = block as { tool_use_id: string; content: string | unknown; is_error?: boolean };
-            openaiMessages.push({
-              role: 'tool',
-              tool_call_id: tr.tool_use_id,
-              content: typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content),
-            });
-            continue;
-          } else if (block.type === 'thinking') {
-            textParts.push(`[Thinking: ${(block as { thinking: string }).thinking}]`);
-          }
-        }
-        openaiMsg.content = textParts.join('\n') || ' ';
-      }
-
-      openaiMessages.push(openaiMsg);
-    }
-
-    return {
-      model: resolvedModel,
-      messages: openaiMessages,
-      max_tokens: anthropicBody.max_tokens ?? 4096,
-      temperature: anthropicBody.temperature,
-      top_p: anthropicBody.top_p,
-      stop: anthropicBody.stop_sequences,
-      stream: true,
-    };
-  }
 }
