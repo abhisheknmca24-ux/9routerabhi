@@ -237,6 +237,146 @@ describe('anthropicToOpenAI', () => {
 //  Response Extraction Tests
 // ═══════════════════════════════════════════════════════════════
 
+describe('anthropicToOpenAI — tool-specific tests', () => {
+  it('converts Anthropic tools array to OpenAI format', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{ role: 'user', content: 'Use search tool' }],
+      max_tokens: 100,
+      tools: [
+        {
+          name: 'search',
+          description: 'Search the web',
+          input_schema: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
+        },
+      ],
+    });
+
+    expect(result.tools).toHaveLength(1);
+    expect(result.tools![0].type).toBe('function');
+    expect(result.tools![0].function.name).toBe('search');
+    expect(result.tools![0].function.description).toBe('Search the web');
+    expect(result.tools![0].function.parameters).toEqual({
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    });
+  });
+
+  it('converts tool_choice: auto', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{ role: 'user', content: 'Use a tool' }],
+      max_tokens: 100,
+      tools: [{ name: 'search', input_schema: { type: 'object' } }],
+      tool_choice: { type: 'auto' },
+    });
+
+    expect(result.tool_choice).toEqual({ type: 'auto' });
+  });
+
+  it('converts tool_choice: tool with specific name', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{ role: 'user', content: 'Use search' }],
+      max_tokens: 100,
+      tools: [{ name: 'search', input_schema: { type: 'object' } }],
+      tool_choice: { type: 'tool', name: 'search' },
+    });
+
+    expect(result.tool_choice).toEqual({ type: 'tool', name: 'search' });
+  });
+
+  it('converts multiple tool_use blocks in one assistant message', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I will search both.' },
+          { type: 'tool_use', id: 'tu1', name: 'search_web', input: { q: 'hello' } },
+          { type: 'tool_use', id: 'tu2', name: 'search_news', input: { topic: 'ai' } },
+        ],
+      }],
+      max_tokens: 100,
+    });
+
+    // Two separate tool_calls should be set on the entry
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].tool_calls).toBeDefined();
+  });
+
+  it('converts tool_result with is_error flag', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu1',
+            content: 'Error: rate limited',
+            is_error: true,
+          },
+        ],
+      }],
+      max_tokens: 100,
+    });
+
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0].role).toBe('tool');
+    expect(result.messages[0].tool_call_id).toBe('tu1');
+    expect(result.messages[0].content).toBe('Error: rate limited');
+  });
+
+  it('converts tool_result with complex content', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'calc1',
+            content: JSON.stringify({ result: 42, unit: 'km' }),
+          },
+        ],
+      }],
+      max_tokens: 100,
+    });
+
+    expect(result.messages[0].content).toBe('{"result":42,"unit":"km"}');
+  });
+
+  it('preserves tool content order with mixed blocks', () => {
+    const result = anthropicToOpenAI({
+      model: 'claude-sonnet-4-5',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'tu1', content: 'Result A' },
+          { type: 'text', text: 'Based on that,' },
+          { type: 'tool_result', tool_use_id: 'tu2', content: 'Result B' },
+          { type: 'text', text: 'and that.' },
+        ],
+      }],
+      max_tokens: 100,
+    });
+
+    // Should be: [tool, tool, user(text+text)]
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages[0].role).toBe('tool');
+    expect(result.messages[1].role).toBe('tool');
+    expect(result.messages[2].role).toBe('user');
+    expect(result.messages[2].content).toContain('Based on that');
+    expect(result.messages[2].content).toContain('and that.');
+  });
+});
+
 describe('extractFromOpenAI', () => {
   it('extracts content and finish reason from a choice', () => {
     const choice = {
