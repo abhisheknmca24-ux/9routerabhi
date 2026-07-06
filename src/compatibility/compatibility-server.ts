@@ -37,10 +37,18 @@ const security = new SecurityIntegration({
 // ─── Stub engine that calls the real gateway ───
 // The real routing engine sits behind the scenes. This adapter calls it.
 import { HttpAgent } from '../performance/http-agent.js';
+import { AliasRepository } from '../repositories/alias-repository.js';
+import { ProviderHealthTracker } from '../services/provider-health-tracker.js';
+import { VirtualModelService } from '../services/virtual-model-service.js';
 
 const gatewayUrl = process.env.GATEWAY_URL || 'http://127.0.0.1:20128';
 const httpAgent = new HttpAgent({ logger });
 const anthropicFormatter = new AnthropicFormatter();
+
+// ─── Virtual Model Service — drives model discovery from aliases ───
+const aliasRepo = new AliasRepository(logger, path.resolve(process.cwd(), 'data', 'aliases.db'));
+const healthTracker = new ProviderHealthTracker(logger);
+const virtualModels = new VirtualModelService(aliasRepo, healthTracker, logger);
 
 // ─── Anthropic /v1/messages handler — uses AnthropicFormatter for exact compat ───
 async function handleAnthropicMessages(req: any, res: any): Promise<void> {
@@ -307,14 +315,46 @@ createEngineServer({
       await handleAnthropicMessages(req, res);
     });
 
-    app.get('/v1/models', async (_req, res) => {
-      // Proxy to real gateway
-      try {
-        const response = await httpAgent.get(`${gatewayUrl}/v1/models`);
-        res.json(response.data || { data: [] });
-      } catch {
-        res.json({ data: [] });
+    app.get('/v1/models', async (req, res) => {
+      // Detect client to determine which format to return
+      const clientInfo = buildClientInfo(req as any);
+      const isAnthropic = clientInfo.protocol === 'anthropic-messages' ||
+                          clientInfo.type === 'claude-desktop';
+
+      if (isAnthropic) {
+        // Return Anthropic-friendly virtual model list
+        res.json(virtualModels.getAnthropicModelList(clientInfo.type));
+      } else {
+        // Return OpenAI format with virtual models
+        res.json(virtualModels.getOpenAIModelList(clientInfo.type));
       }
+    });
+
+    // Virtual model management endpoint
+    app.get('/api/virtual-models', async (_req, res) => {
+      const models = virtualModels.getModels();
+      res.json({ models, total: models.length });
+    });
+
+    app.get('/api/virtual-models/:id', async (req, res) => {
+      const model = virtualModels.getModel(req.params.id);
+      if (!model) return res.status(404).json({ error: 'Model not found' });
+      res.json(model);
+    });
+
+    app.post('/api/virtual-models/refresh', async (_req, res) => {
+      virtualModels.clearCache();
+      const models = virtualModels.getModels();
+      res.json({ refreshed: true, total: models.length });
+    });
+
+    // Model discovery dashboard
+    app.get('/models', (_req, res) => {
+      const htmlPath = path.resolve(process.cwd(), 'src', 'gateway', 'model-discovery-dashboard.html');
+      if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath);
+      const distPath = path.resolve(process.cwd(), 'dist', 'gateway', 'model-discovery-dashboard.html');
+      if (fs.existsSync(distPath)) return res.sendFile(distPath);
+      res.status(404).type('text').send('Dashboard not found');
     });
 
     // Client stats dashboard

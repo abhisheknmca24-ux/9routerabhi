@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Discovery</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface-2: #1c2333; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922; --orange: #d4760a; --purple: #d2a8ff;
+    --radius: 8px; --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    padding: 24px; max-width: 1400px; margin: 0 auto; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  .subtitle { font-size: 13px; color: var(--text-dim); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #79c0ff; }
+
+  .stats-bar {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 20px; text-align: center; min-width: 100px;
+  }
+  .stat-card .val { font-size: 22px; font-weight: 700; }
+  .stat-card .lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
+
+  .info-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+    font-size: 13px; color: var(--text-dim); line-height: 1.6;
+  }
+  .info-box code {
+    background: var(--surface-2); padding: 2px 6px; border-radius: 3px;
+    font-size: 12px; color: var(--accent);
+  }
+
+  .table-wrap {
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { background: var(--surface-2); font-weight: 600; color: var(--text-dim); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-2); }
+  .empty td { text-align: center; padding: 40px; color: var(--text-dim); font-style: italic; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
+  }
+  .badge-combo { background: #58a6ff33; color: var(--accent); }
+  .badge-model { background: #3fb95033; color: var(--green); }
+  .badge-healthy { background: #3fb95022; color: var(--green); }
+  .badge-degraded { background: #d2992222; color: var(--yellow); }
+  .badge-critical { background: #f8514922; color: var(--red); }
+  .badge-auth-disabled { background: #d4760a22; color: var(--orange); }
+
+  .health-bar {
+    width: 60px; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle;
+  }
+  .health-bar .fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .fill-green { background: var(--green); }
+  .fill-yellow { background: var(--yellow); }
+  .fill-red { background: var(--red); }
+
+  .flow {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 16px;
+    flex-wrap: wrap; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .flow .step { padding: 4px 10px; border-radius: 4px; }
+  .flow .step-client { background: #58a6ff33; color: var(--accent); }
+  .flow .step-alias { background: #d2a8ff33; color: var(--purple); }
+  .flow .step-combo { background: #3fb95033; color: var(--green); }
+  .flow .step-health { background: #d2992233; color: var(--yellow); }
+  .flow .arrow { color: var(--text-dim); }
+
+  .provider-list { display: flex; gap: 4px; flex-wrap: wrap; }
+  .provider-tag {
+    padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    border: 1px solid var(--border);
+  }
+
+  @media (max-width: 768px) { body { padding: 12px; } .stats-bar { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📡 Model Discovery</h1>
+    <div class="subtitle">Virtual Anthropic-compatible models driven by aliases</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-primary" onclick="refreshAll()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="info-box">
+  Claude Desktop and other clients see <strong>virtual model names</strong> like <code>claude-sonnet-4-5</code>.
+  Each virtual model maps internally to a combo profile.
+  No internal provider names are exposed unless a client sends a provider-prefixed model (e.g. <code>nvidia/llama</code>).
+</div>
+
+<div class="flow">
+  <span class="step step-client">Client Request</span>
+  <span class="arrow">→</span>
+  <span class="step step-alias">Alias Resolver</span>
+  <span class="arrow">→</span>
+  <span class="step step-combo">Combo Selection</span>
+  <span class="arrow">→</span>
+  <span class="step step-health">Provider Health</span>
+  <span class="arrow">→</span>
+  <span class="step step-client">Provider Execution</span>
+</div>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat-card"><div class="val text-accent" id="statTotal">0</div><div class="lbl">Virtual Models</div></div>
+  <div class="stat-card"><div class="val text-green" id="statHealthy">0</div><div class="lbl">Healthy</div></div>
+  <div class="stat-card"><div class="val text-yellow" id="statDegraded">0</div><div class="lbl">Degraded</div></div>
+  <div class="stat-card"><div class="val" id="statAvgScore" style="color:var(--purple)">0%</div><div class="lbl">Avg Health</div></div>
+  <div class="stat-card"><div class="val" id="statRequests">0</div><div class="lbl">Total Requests</div></div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Virtual Model</th>
+        <th>Mapped Combo</th>
+        <th>Providers</th>
+        <th>Health</th>
+        <th>Latency</th>
+        <th>Requests</th>
+        <th>Success</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr class="empty"><td colspan="8">Loading virtual models...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const API = '/api/virtual-models';
+
+async function refreshAll() {
+  try {
+    const res = await fetch(API);
+    const data = await res.json();
+    render(data.models || []);
+  } catch {
+    document.getElementById('tableBody').innerHTML =
+      '<tr class="empty"><td colspan="8">Failed to load — is the engine running?</td></tr>';
+  }
+}
+
+function render(models) {
+  // Stats
+  document.getElementById('statTotal').textContent = models.length;
+  const scores = models.filter(m => m.providerHealth?.averageScore !== undefined);
+  const healthy = scores.filter(m => (m.providerHealth?.averageScore || 0) >= 0.7).length;
+  const degraded = scores.filter(m => {
+    const s = m.providerHealth?.averageScore || 0;
+    return s > 0 && s < 0.7;
+  }).length;
+  document.getElementById('statHealthy').textContent = healthy;
+  document.getElementById('statDegraded').textContent = degraded;
+  const avgAll = scores.length > 0
+    ? scores.reduce((a, m) => a + (m.providerHealth?.averageScore || 0), 0) / scores.length * 100
+    : 0;
+  document.getElementById('statAvgScore').textContent = avgAll.toFixed(0) + '%';
+  document.getElementById('statRequests').textContent = models.reduce((a, m) => a + (m.stats?.requests || 0), 0);
+
+  // Table
+  const tbody = document.getElementById('tableBody');
+  if (models.length === 0) {
+    tbody.innerHTML = '<tr class="empty"><td colspan="8">No virtual models. Create aliases to see them here, or the defaults will auto-create.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = models.map(m => {
+    const ph = m.providerHealth || {};
+    const avgScore = ph.averageScore !== undefined ? (ph.averageScore * 100).toFixed(0) : '—';
+    const avgLatency = ph.averageLatency ? ph.averageLatency + 'ms' : '—';
+    const providers = (ph.providers || []).map((p: string) => {
+      const s = (ph.scores || []).find((s: any) => s.id === p);
+      const status = s?.status || 'unknown';
+      return `<span class="provider-tag badge-${status}">${p}</span>`;
+    }).join('');
+
+    const healthPct = ph.averageScore !== undefined ? Math.round(ph.averageScore * 100) : 0;
+    const healthColor = healthPct >= 70 ? 'green' : healthPct >= 40 ? 'yellow' : 'red';
+
+    const stats = m.stats || {};
+    const successRate = stats.requests > 0 ? ((stats.successful / stats.requests) * 100).toFixed(0) + '%' : '—';
+
+    return `<tr>
+      <td><strong><code>${esc(m.id)}</code></strong></td>
+      <td><span class="badge badge-combo">${esc(m.mappedCombo)}</span></td>
+      <td><div class="provider-list">${providers || '—'}</div></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="health-bar"><div class="fill fill-${healthColor}" style="width:${healthPct}%"></div></div>
+          <span style="font-size:12px">${avgScore}${avgScore !== '—' ? '%' : ''}</span>
+        </div>
+      </td>
+      <td style="font-size:13px">${avgLatency}</td>
+      <td>${stats.requests || 0}</td>
+      <td>${successRate}</td>
+      <td><span class="badge badge-${healthPct >= 70 ? 'healthy' : healthPct >= 40 ? 'degraded' : 'critical'}">${healthPct >= 70 ? 'Healthy' : healthPct >= 40 ? 'Degraded' : 'Critical'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) { if(!s)return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+document.addEventListener('DOMContentLoaded', refreshAll);
+setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>
