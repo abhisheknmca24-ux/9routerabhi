@@ -165,6 +165,14 @@ export class AnthropicController {
     let finalUsage: { promptTokens?: number; completionTokens?: number } = {};
     let lastToolCalls: Array<{ id: string; name: string; arguments: string }> | undefined;
     let blockIndex = 0;
+    let startedBlocks = false;
+
+    // Emit required preamble: ping + message_start
+    res.write(this.formatter.renderEvent(this.formatter.ping()));
+    res.write(this.formatter.renderEvent(this.formatter.messageStart({
+      model,
+      inputTokens: 0,
+    })));
 
     for (let attempt = 0; attempt < Math.min(providerChain.length, this.config.maxStreamingFailover ?? 3); attempt++) {
       const upstreamUrl = `${providerChain[attempt]}/v1/chat/completions`;
@@ -178,9 +186,9 @@ export class AnthropicController {
           (delta: string) => {
             if (!delta) return;
 
-            // First text from this provider — send content_block_start if needed
-            // (content_block_start is only sent once per block)
-            if (accumulatedContent === '' && attempt === 0) {
+            // content_block_start must be sent before first delta
+            if (!startedBlocks) {
+              startedBlocks = true;
               res.write(this.formatter.renderEvent(this.formatter.contentBlockStart(blockIndex, '')));
             }
 
