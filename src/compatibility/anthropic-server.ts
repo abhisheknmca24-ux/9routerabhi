@@ -20,9 +20,11 @@
 
 import express from 'express';
 import http from 'node:http';
+import path from 'node:path';
 import { ConsoleLogger } from '../logger/console-logger.js';
 import { HttpAgent } from '../performance/http-agent.js';
 import { AnthropicController } from './anthropic-controller.js';
+import { ModelAliasManager } from '../model-alias/model-alias-manager.js';
 
 const PORT = parseInt(process.env.ANTHROPIC_PORT || '20138', 10);
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://127.0.0.1:20128';
@@ -37,6 +39,10 @@ const logger = new ConsoleLogger(
 const httpAgent = new HttpAgent({ logger });
 const anthropicController = new AnthropicController(httpAgent, { gatewayUrl: GATEWAY_URL });
 
+// ─── Alias manager for virtual model discovery ───
+const aliasConfigPath = path.resolve(process.cwd(), 'config', 'aliases.json');
+const aliasManager = new ModelAliasManager(aliasConfigPath);
+
 // ─── Express App ───
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -44,6 +50,23 @@ app.use(express.json({ limit: '10mb' }));
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'anthropic-compat', port: PORT });
+});
+
+// GET /v1/models — return virtual model names from aliases
+// Claude Desktop sees only alias names, never internal provider IDs
+app.get('/v1/models', (_req, res) => {
+  const aliases = aliasManager.getAll();
+  const models = aliases.map(a => ({
+    type: 'model',
+    id: a.name,
+    display_name: a.description || a.name,
+    created_at: new Date().toISOString(),
+  }));
+
+  res.json({
+    object: 'list',
+    data: models,
+  });
 });
 
 // POST /v1/messages — the only endpoint
