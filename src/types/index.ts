@@ -7,3 +7,4 @@ export * from './security.types.js';
 export * from './logger.types.js';
 export * from './repository.types.js';
 export * from './alias.types.js';
+export * from './api.types.js';

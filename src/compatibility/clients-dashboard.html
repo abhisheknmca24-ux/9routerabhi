@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clients — Universal Compatibility</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface-2: #1c2333; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922; --orange: #d4760a; --purple: #d2a8ff;
+    --radius: 8px; --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    padding: 24px; max-width: 1200px; margin: 0 auto; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 24px; font-weight: 600; }
+  h1 span { color: var(--accent); }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-danger { border-color: var(--red); color: var(--red); }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+
+  /* ─── Architecture Diagram ─── */
+  .arch {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; margin-bottom: 24px; font-family: monospace; font-size: 13px; line-height: 2;
+    text-align: center;
+  }
+  .arch .arrow { color: var(--text-dim); }
+  .arch .box {
+    display: inline-block; padding: 6px 16px; border-radius: 4px; margin: 2px;
+    font-weight: 500;
+  }
+  .arch .box-client { background: #58a6ff33; color: var(--accent); }
+  .arch .box-detect { background: #d2a8ff33; color: var(--purple); }
+  .arch .box-adapter { background: #3fb95033; color: var(--green); }
+  .arch .box-core { background: #d2992233; color: var(--yellow); }
+  .arch .box-formatter { background: #d4760a33; color: var(--orange); }
+
+  /* ─── Summary ─── */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; text-align: center;
+  }
+  .card .value { font-size: 28px; font-weight: 700; }
+  .card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+  /* ─── Client Grid ─── */
+  .client-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .client-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+    transition: border-color 0.3s;
+  }
+  .client-card.supported { border-left: 4px solid var(--green); }
+  .client-card.active { border-left: 4px solid var(--accent); background: #1c2333; }
+
+  .client-icon { font-size: 32px; margin-bottom: 8px; }
+  .client-name { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+  .client-protocol { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+  .client-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .client-stat { padding: 6px 8px; background: var(--surface-2); border-radius: 4px; }
+  .client-stat .val { font-size: 14px; font-weight: 600; }
+  .client-stat .lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
+  .client-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 10px; font-weight: 500;
+  }
+  .badge-openai { background: #58a6ff33; color: var(--accent); }
+  .badge-anthropic { background: #d2a8ff33; color: var(--purple); }
+  .badge-active { background: #3fb95033; color: var(--green); }
+  .badge-idle { background: #8b949e33; color: var(--text-dim); }
+
+  /* ─── Compatibility Table ─── */
+  .compat-section { margin-bottom: 24px; }
+  .compat-section h2 { font-size: 16px; margin-bottom: 12px; }
+  .table-wrap {
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { background: var(--surface-2); font-weight: 600; color: var(--text-dim); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  .check { color: var(--green); } .cross { color: var(--red); } .warn { color: var(--yellow); }
+
+  /* ─── Documentation ─── */
+  .docs {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; margin-bottom: 24px;
+  }
+  .docs h2 { font-size: 16px; margin-bottom: 12px; }
+  .docs h3 { font-size: 14px; margin: 16px 0 8px 0; color: var(--accent); }
+  .docs p, .docs li { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
+  .docs ul, .docs ol { padding-left: 20px; }
+  .docs code {
+    background: var(--surface-2); padding: 2px 6px; border-radius: 3px;
+    font-size: 12px; color: var(--accent);
+  }
+  .docs pre {
+    background: var(--surface-2); padding: 12px; border-radius: var(--radius);
+    overflow-x: auto; font-size: 12px; margin: 8px 0;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .client-grid { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌐 <span>Universal</span> Client Compatibility</h1>
+  <div class="header-actions">
+    <span id="status" style="font-size:13px;color:var(--text-dim)">● Connected</span>
+    <button class="btn" onclick="refreshAll()">↻ Refresh</button>
+    <button class="btn btn-danger" onclick="resetStats()">Reset Stats</button>
+  </div>
+</header>
+
+<div class="arch">
+  <span class="box box-client">Client</span>
+  <span class="arrow">→</span>
+  <span class="box box-detect">Detector</span>
+  <span class="arrow">→</span>
+  <span class="box box-adapter">Adapter</span>
+  <span class="arrow">→</span>
+  <span class="box box-core">Routing Engine</span>
+  <span class="arrow">→</span>
+  <span class="box box-adapter">Formatter</span>
+  <span class="arrow">→</span>
+  <span class="box box-client">Client</span>
+  <br>
+  <span style="color:var(--text-dim);font-size:11px">
+    Single compatibility layer · Auto-detect protocol · Zero changes to existing engines
+  </span>
+</div>
+
+<div class="summary-grid" id="summaryGrid">
+  <div class="card"><div class="value text-accent" id="totalClients">0</div><div class="label">Connected Clients</div></div>
+  <div class="card"><div class="value text-green" id="totalRequests">0</div><div class="label">Total Requests</div></div>
+  <div class="card"><div class="value text-purple" id="totalProtocols" style="color:var(--purple)">0</div><div class="label">Protocols</div></div>
+  <div class="card"><div class="value text-yellow" id="activeClients">0</div><div class="label">Active Now</div></div>
+</div>
+
+<div class="client-grid" id="clientGrid">
+  <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">Loading client data...</div>
+</div>
+
+<div class="compat-section">
+  <h2>📋 Compatibility Matrix</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Protocol</th>
+          <th>Chat</th>
+          <th>Streaming</th>
+          <th>Models</th>
+          <th>Auth</th>
+          <th>Auto-Detect</th>
+        </tr>
+      </thead>
+      <tbody id="compatTable">
+        <tr>
+          <td><strong>Claude Desktop</strong></td>
+          <td><span class="badge-anthropic" style="padding:2px 8px;border-radius:12px;font-size:11px">Anthropic</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Claude Code</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Claude CLI</strong></td>
+          <td><span class="badge-anthropic" style="padding:2px 8px;border-radius:12px;font-size:11px">Anthropic</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Cursor</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Continue.dev</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>RooCode</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Cline</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>VS Code AI</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>OpenAI SDK</strong></td>
+          <td><span class="badge-openai" style="padding:2px 8px;border-radius:12px;font-size:11px">OpenAI</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+        <tr>
+          <td><strong>Anthropic SDK</strong></td>
+          <td><span class="badge-anthropic" style="padding:2px 8px;border-radius:12px;font-size:11px">Anthropic</span></td>
+          <td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs">
+  <h2>📚 Developer Documentation</h2>
+
+  <h3>Architecture</h3>
+  <p>The Universal Compatibility Layer sits between clients and the routing engine. It consists of three components:</p>
+  <ol>
+    <li><strong>ClientDetector</strong> — Identifies the client from User-Agent, headers, and API path</li>
+    <li><strong>ProtocolAdapter</strong> — Converts between OpenAI/Anthropic wire formats and a normalized <code>SharedRequest</code></li>
+    <li><strong>CompatibilityLayer</strong> — Orchestrates detection, parsing, routing, and formatting</li>
+  </ol>
+
+  <h3>How Client Detection Works</h3>
+  <p>The detector checks, in order:</p>
+  <ol>
+    <li><strong>User-Agent header</strong> — Matches against known client patterns (ClaudeDesktop, cursor, Continue, etc.)</li>
+    <li><strong>Protocol headers</strong> — Checks for <code>anthropic-version</code> or <code>openai-organization</code></li>
+    <li><strong>API path</strong> — Falls back to path-based detection (<code>/v1/messages</code> → Anthropic, <code>/v1/chat/completions</code> → OpenAI)</li>
+  </ol>
+  <p>Detection returns a confidence score (0.0–1.0). Headers-based detection scores 0.9, path-based scores 0.7.</p>
+
+  <h3>SharedRequest — Universal Request Format</h3>
+  <p>All client requests are normalized into this format:</p>
+  <pre>{
+  model: string;         // Model name from client
+  messages: [{           // Normalized messages
+    role: 'user'|'assistant'|'system'|'tool',
+    content: string | ContentBlock[]
+  }];
+  maxTokens?: number;
+  temperature?: number;
+  stream: boolean;
+  client: {
+    type: ClientType;    // Detected client
+    protocol: ProtocolType; // Detected protocol
+    userAgent: string;
+    ip: string;
+  };
+}</pre>
+
+  <h3>Adding a New Client</h3>
+  <ol>
+    <li>Add the client name to <code>ClientType</code> in <code>types/api.types.ts</code></li>
+    <li>Add a User-Agent pattern to <code>UA_PATTERNS</code> in <code>compatibility/client-detector.ts</code></li>
+    <li>If the client uses a custom protocol, add a <code>_fromCustom()</code> method to <code>compatibility/protocol-adapter.ts</code></li>
+  </ol>
+
+  <h3>API Endpoints</h3>
+  <table style="width:100%;font-size:13px">
+    <tr><td><code>POST /v1/chat/completions</code></td><td>OpenAI-compatible chat</td></tr>
+    <tr><td><code>POST /v1/messages</code></td><td>Anthropic-compatible messages</td></tr>
+    <tr><td><code>GET /v1/models</code></td><td>List models</td></tr>
+    <tr><td><code>GET /api/compatibility/clients</code></td><td>Connected client stats</td></tr>
+    <tr><td><code>POST /api/compatibility/detect</code></td><td>Debug: detect client from request</td></tr>
+    <tr><td><code>GET /clients</code></td><td>This dashboard</td></tr>
+  </table>
+
+  <h3>Configuration</h3>
+  <p>No additional configuration needed. The compatibility engine auto-detects everything.</p>
+  <p>Set <code>COMPAT_ENGINE_PORT</code> to change the port (default: 20134).</p>
+  <p>Set <code>GATEWAY_URL</code> to point to the upstream gateway (default: <code>http://127.0.0.1:20128</code>).</p>
+
+  <h3>Backward Compatibility</h3>
+  <p>The existing gateway on port 20128 continues to work exactly as before. The compatibility layer on port 20134 is a new entry point that wraps it. Both can run simultaneously.</p>
+</div>
+
+<script>
+const API = '/api/compatibility';
+
+async function refreshAll() {
+  try {
+    const res = await fetch(`${API}/clients`);
+    const data = await res.json();
+    render(data.clients || []);
+  } catch {
+    document.getElementById('clientGrid').innerHTML =
+      `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">
+        Failed to load — is the compatibility engine running on port 20134?
+      </div>`;
+  }
+}
+
+function render(clients) {
+  // Summary
+  document.getElementById('totalClients').textContent = clients.length;
+  document.getElementById('totalRequests').textContent = clients.reduce((a, c) => a + c.requestCount, 0);
+
+  const protocols = new Set(clients.map(c => c.protocol).filter(Boolean));
+  document.getElementById('totalProtocols').textContent = protocols.size;
+
+  const recent = clients.filter(c => Date.now() - new Date(c.lastSeen).getTime() < 60000).length;
+  document.getElementById('activeClients').textContent = recent;
+
+  // Client cards
+  const grid = document.getElementById('clientGrid');
+  if (clients.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">
+      No clients connected yet. Send a request to see client data.
+    </div>`;
+    return;
+  }
+
+  const clientIcons = {
+    'claude-desktop': '🖥️', 'claude-code': '⌨️', 'claude-cli': '💻',
+    'cursor': '↗️', 'continue-dev': '🔧', 'roo-code': '🦘',
+    'cline': '🤖', 'vscode-ai': '📝', 'openai-compatible': '🔵',
+    'anthropic-compatible': '🟣', 'unknown': '❓',
+  };
+  const clientNames = {
+    'claude-desktop': 'Claude Desktop', 'claude-code': 'Claude Code', 'claude-cli': 'Claude CLI',
+    'cursor': 'Cursor', 'continue-dev': 'Continue.dev', 'roo-code': 'RooCode',
+    'cline': 'Cline', 'vscode-ai': 'VS Code AI', 'openai-compatible': 'OpenAI Compatible',
+    'anthropic-compatible': 'Anthropic Compatible', 'unknown': 'Unknown Client',
+  };
+
+  grid.innerHTML = clients.map(c => {
+    const isActive = Date.now() - new Date(c.lastSeen).getTime() < 60000;
+    const icon = clientIcons[c.type] || '❓';
+    const displayName = clientNames[c.type] || c.type;
+    const protocol = c.protocol || 'auto-detected';
+    return `
+      <div class="client-card ${isActive ? 'active' : 'supported'}">
+        <div class="client-icon">${icon}</div>
+        <div class="client-name">${displayName}</div>
+        <div class="client-protocol">
+          <span class="client-badge ${protocol.includes('anthropic') ? 'badge-anthropic' : 'badge-openai'}">
+            ${protocol}
+          </span>
+          <span class="client-badge ${isActive ? 'badge-active' : 'badge-idle'}" style="margin-left:4px">
+            ${isActive ? '● Active' : '○ Idle'}
+          </span>
+        </div>
+        <div class="client-stats">
+          <div class="client-stat">
+            <div class="val">${c.requestCount}</div>
+            <div class="lbl">Requests</div>
+          </div>
+          <div class="client-stat">
+            <div class="val">${c.errors}</div>
+            <div class="lbl">Errors</div>
+          </div>
+          <div class="client-stat" style="grid-column:1/-1">
+            <div class="val" style="font-size:12px">${new Date(c.lastSeen).toLocaleString()}</div>
+            <div class="lbl">Last Seen</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function resetStats() {
+  await fetch(`${API}/reset`, { method: 'POST' });
+  refreshAll();
+}
+
+document.addEventListener('DOMContentLoaded', refreshAll);
+setInterval(refreshAll, 10000);
+</script>
+</body>
+</html>
